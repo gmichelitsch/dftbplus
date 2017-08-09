@@ -7,14 +7,16 @@
 
 ROOT := $(PWD)
 
-.PHONY: default misc all
+.PHONY: default misc api all
 default: dftb+ modes waveplot
 misc: misc_skderivs misc_slakovalue
+api: api_ewald
 all: default misc
 
-.PHONY: install install_misc install_all
+.PHONY: install install_misc install_install_api all
 install: install_dftb+ install_modes install_waveplot install_dptools
 install_misc: install_misc_skderivs install_misc_slakovalue
+install_api: install_api_ewald
 
 .PHONY: test
 test: test_dftb+ test_dptools
@@ -66,6 +68,15 @@ external_xmlf90 external_fsockets external_dftd3:
           -f $(ROOT)/external/$(EXTERNAL_NAME)/make.dpbuild \
           ROOT=$(ROOT) BUILDROOT=$(BUILDDIR)
 
+API_NAME = $(subst api_,,$@)
+
+.PHONY: api_ewald
+api_ewald:
+	mkdir -p $(BUILDDIR)/api/$(API_NAME)
+	$(MAKE) -C $(BUILDDIR)/api/$(API_NAME) \
+	    -f $(ROOT)/api/$(API_NAME)/make.build \
+	    ROOT=$(ROOT) BUILDROOT=$(BUILDDIR)
+
 ################################################################################
 # Test targets
 ################################################################################
@@ -111,6 +122,12 @@ PYTHON := python
 install_dptools:
 	cd $(ROOT)/tools/dptools \
             && $(PYTHON) setup.py install --prefix $(INSTALLDIR)
+
+.PHONY: install_api_ewald
+install_api_ewald:
+	$(MAKE) -C $(BUILDDIR)/api/$(subst install_api_,,$@) \
+	    -f $(ROOT)/api/$(subst install_api_,,$@)/make.build \
+	    ROOT=$(ROOT) BUILDROOT=$(BUILDDIR) install
 
 ################################################################################
 # Check targets

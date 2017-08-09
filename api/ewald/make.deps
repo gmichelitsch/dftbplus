@@ -1,0 +1,5 @@
+ewald.o: _mod_coulomb
+ewald.o = ewald.o $(_mod_coulomb)
+_mod_dftbp_api_ewald: ewald.o
+_mod_dftbp_api_ewald = $(ewald.o)
+

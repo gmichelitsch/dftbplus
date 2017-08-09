@@ -1,0 +1,31 @@
+#------------------------------------------------------------------------------#
+#  DFTB+: general package for performing fast atomistic simulations            #
+#  Copyright (C) 2017  DFTB+ developers group                                  #
+#                                                                              #
+#  See the LICENSE file for terms of usage and distribution.                   #
+#------------------------------------------------------------------------------#
+
+############################################################################
+#  Global variables
+############################################################################
+
+TARGETS = libdftbp_ewald.a
+
+.PHONY: all
+all: $(TARGETS)
+
+# Include common makefile
+SRCDIRS := $(ROOT)/api/ewald
+SRCDIRS += $(wildcard $(ROOT)/prog/dftb+/lib_*)
+SRCDIRS += $(ROOT)/prog/dftb+/include
+INCDIRS := $(ROOT)/prog/dftb+/include
+include $(ROOT)/prog/dftb+/make.common
+
+libdftbp_ewald.a: $(ewald.o)
+	ar r $@ $(filter-out _%,$^)
+
+install: $(TARGETS)
+	mkdir -p $(INSTALLDIR)/lib
+	cp $^ $(INSTALLDIR)/lib
+	mkdir -p $(INSTALLDIR)/include
+	cp *.mod $(INSTALLDIR)/include
