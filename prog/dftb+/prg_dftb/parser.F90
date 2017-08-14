@@ -25,6 +25,7 @@ module parser
   use oldcompat
   use lapackroutines, only : matinv
   use periodic
+  use sampling
   use simplealgebra, only: determinant33
   use dispersions
   use slakocont

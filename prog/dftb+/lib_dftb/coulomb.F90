@@ -96,7 +96,7 @@ contains
   !!* @param charges1 Charges of the 2nd group of objects
   !!* @param blurWidths1 Gaussian blur widht of the charges in the 2nd group
   subroutine sumInvR_cluster_asymm(invRVec, nAtom0, nAtom1, coord0, &
-      &coord1, charges1, blurWidths1)
+      &coord1, charges1, blurWidths1, ignoreSamePos)
     real(dp), intent(out) :: invRVec(:)
     integer, intent(in) :: nAtom0
     integer, intent(in) :: nAtom1
@@ -104,6 +104,7 @@ contains
     real(dp), intent(in)  :: coord1(:,:)
     real(dp), intent(in)  :: charges1(:)
     real(dp), intent(in), optional :: blurWidths1(:)
+    logical, intent(in) :: ignoreSamePos
 
     integer :: iAt0, iAt1
     real(dp) :: dist, vect(3), fTmp
@@ -145,9 +146,9 @@ contains
         do iAt1 = 1, nAtom1
           vect(:) = coord0(:,iAt0) - coord1(:,iAt1)
           dist = sqrt(sum(vect(:)**2))
-          if (dist > epsilon(0.0_dp)) then
+          if (dist > tolSameDist) then
             invRVec(iAt0) = invRVec(iAt0) + charges1(iAt1) / dist
-          else
+          elseif (.not. ignoreSamePos) then
             write (error_string, ftTooClose) iAt0, iAt1
             call error(trim(error_string))
           end if

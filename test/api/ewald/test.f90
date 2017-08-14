@@ -5,18 +5,39 @@ program test
 
   integer, parameter :: dp = kind(1.0d0)
 
+  type(EwaldCalculator) :: ewaldCalc
   integer :: nAtom
-  real(dp), allocatable :: invRMat(:,:), coords(:,:)
+  real(dp) :: latVecs(3, 3)
+  real(dp) :: latConst
+  real(dp), allocatable :: coords(:,:)
+  real(dp), allocatable :: charges(:), pot1(:), pot2(:)
+  real(dp) :: alpha, tolerance
   character(20) :: formStr
 
   nAtom = 2
-  allocate(invRMat(2, nAtom))
-  allocate(coords(3, nAtom))
-  coords(:, 1) = [0.0_dp, 0.0_dp, 0.0_dp]
-  coords(:, 2) = [1.0_dp, 1.0_dp, 1.0_dp]
-  call invR(invRMat, nAtom, coords)
-  write(formStr, "(A,I0,A)") "(", nAtom, "E20.12)"
-  write(stdOut, "(A)") "Received 1/R matrix:"
-  write(stdOut, formStr) transpose(invRMat)
+  latConst = 5.427092_dp / 0.529177249_dp
+  coords = latConst * reshape([0.0_dp, 0.0_dp, 0.0_dp,&
+      & 0.25_dp, 0.25_dp, 0.25_dp], [3, nAtom])
+  latVecs(:,:) = latConst * reshape([0.0_dp, 0.5_dp, 0.5_dp,&
+      & 0.5_dp, 0.0_dp, 0.5_dp,&
+      & 0.5_dp, 0.5_dp, 0.0_dp], [3, 3])
+  charges = [1.47548659_dp, -1.47548659_dp]
+  alpha = 0.491_dp
+  tolerance = 1e-9_dp
+
+  allocate(pot1(nAtom))
+  allocate(pot2(nAtom))
+
+  call init(ewaldCalc, nAtom, alpha, tolerance)
+  call ewaldCalc%setLatticeVectors(latVecs)
+  call ewaldCalc%getPeriodicPotential(coords, charges, pot1)
+  call ewaldCalc%getCentralPotential(coords, charges, pot2)
+
+  write(stdOut, "(A)") "Full periodic electrostatic potential:"
+  write(stdOut, "(E20.12)") pot1
+  write(stdOut, "(A)") "Electrostatic potential contribution from central cell:"
+  write(stdOut, "(E20.12)") pot2
+  write(stdOut, "(A)") "Difference:"
+  write(stdOut, "(E20.12)") pot1 - pot2
   
 end program test
