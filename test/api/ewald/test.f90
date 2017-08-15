@@ -16,12 +16,14 @@ program test
 
   nAtom = 2
   latConst = 5.427092_dp / 0.529177249_dp
-  coords = latConst * reshape([0.0_dp, 0.0_dp, 0.0_dp,&
+  allocate(coords(3, nAtom))
+  coords(:,:) = latConst * reshape([0.0_dp, 0.0_dp, 0.0_dp,&
       & 0.25_dp, 0.25_dp, 0.25_dp], [3, nAtom])
   latVecs(:,:) = latConst * reshape([0.0_dp, 0.5_dp, 0.5_dp,&
       & 0.5_dp, 0.0_dp, 0.5_dp,&
       & 0.5_dp, 0.5_dp, 0.0_dp], [3, 3])
-  charges = [1.47548659_dp, -1.47548659_dp]
+  allocate(charges(nAtom))
+  charges(:) = [1.47548659_dp, -1.47548659_dp]
   alpha = 0.491_dp
   tolerance = 1e-9_dp
 
