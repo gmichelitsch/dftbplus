@@ -8,7 +8,8 @@ module dftbp_api_ewald
   implicit none
   private
 
-  public :: EwaldCalculator, init
+  public :: EwaldCalculator
+  public :: init, setLatticeVectors, getPeriodicPotential, getCentralPotential
 
 
   type :: EwaldCalculator
@@ -19,16 +20,24 @@ module dftbp_api_ewald
     real(dp) :: tolerance
     real(dp) :: rCutoff, gCutoff
     real(dp), allocatable :: rCellVecs(:,:), gCellVecs(:,:)
-  contains
-    procedure :: setLatticeVectors
-    procedure :: getPeriodicPotential
-    procedure :: getCentralPotential
   end type EwaldCalculator
-
   
   interface init
     module procedure EwaldCalculator_init
   end interface init
+
+  interface setLatticeVectors
+    module procedure EwaldCalculator_setLatticeVectors
+  end interface setLatticeVectors
+
+  interface getPeriodicPotential
+    module procedure EwaldCalculator_getPeriodicPotential
+  end interface getPeriodicPotential
+
+  interface getCentralPotential
+    module procedure EwaldCalculator_getCentralPotential
+  end interface getCentralPotential
+  
 
 contains
 
@@ -56,10 +65,10 @@ contains
 
 
   !> Sets the lattice vectors for the current lattice.
-  subroutine setLatticeVectors(this, latVecs)
+  subroutine EwaldCalculator_setLatticeVectors(this, latVecs)
 
     !> Instance.
-    class(EwaldCalculator), intent(inout) :: this
+    type(EwaldCalculator), intent(inout) :: this
 
     !> Lattice vectors (x,y,z|1,2,3)
     real(dp), intent(in) :: latVecs(:,:)
@@ -78,14 +87,14 @@ contains
         & onlyInside=.true., reduceByInversion=.true., withoutOrigin=.true.)
     this%gCellVecs(:,:) = matmul(recVecs, this%gCellVecs)
 
-  end subroutine setLatticeVectors
+  end subroutine EwaldCalculator_setLatticeVectors
 
 
   !> Returns the electrostatic potential contributed by the atoms in the central cell.
-  subroutine getCentralPotential(this, coords, charges, potential)
+  subroutine EwaldCalculator_getCentralPotential(this, coords, charges, potential)
 
     !> Instance
-    class(EwaldCalculator), intent(inout) :: this
+    type(EwaldCalculator), intent(inout) :: this
 
     !> Coordinates of the atoms. Shape: (3, nAtom).
     real(dp), intent(in) :: coords(:,:)
@@ -98,14 +107,14 @@ contains
 
     call sumInvR(potential, this%nAtom, this%nAtom, coords, coords, charges, ignoreSamePos=.true.)
 
-  end subroutine getCentralPotential
+  end subroutine EwaldCalculator_getCentralPotential
 
 
   !> Returns the electrostatic potential considering all periodic images.
-  subroutine getPeriodicPotential(this, coords, charges, potential)
+  subroutine EwaldCalculator_getPeriodicPotential(this, coords, charges, potential)
 
     !> Instance
-    class(EwaldCalculator), intent(inout) :: this
+    type(EwaldCalculator), intent(inout) :: this
 
     !> Coordinates of the atoms. Shape: (3, nAtom).
     real(dp), intent(in) :: coords(:,:)
@@ -119,7 +128,7 @@ contains
     call sumInvR(potential, this%nAtom, this%nAtom, coords, coords, charges, this%rCellVecs,&
         & this%gCellVecs, this%alpha, this%cellVol)
     
-  end subroutine getPeriodicPotential
+  end subroutine EwaldCalculator_getPeriodicPotential
     
 
 end module dftbp_api_ewald

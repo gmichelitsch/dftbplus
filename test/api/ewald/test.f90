@@ -29,9 +29,9 @@ program test
   allocate(pot2(nAtom))
 
   call init(ewaldCalc, nAtom, alpha, tolerance)
-  call ewaldCalc%setLatticeVectors(latVecs)
-  call ewaldCalc%getPeriodicPotential(coords, charges, pot1)
-  call ewaldCalc%getCentralPotential(coords, charges, pot2)
+  call setLatticeVectors(ewaldCalc, latVecs)
+  call getPeriodicPotential(ewaldCalc, coords, charges, pot1)
+  call getCentralPotential(ewaldCalc, coords, charges, pot2)
 
   write(stdOut, "(A)") "Full periodic electrostatic potential:"
   write(stdOut, "(E20.12)") pot1
