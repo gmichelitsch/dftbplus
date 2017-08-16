@@ -9,7 +9,7 @@ program test
   integer :: nAtom
   real(dp) :: latVecs(3, 3)
   real(dp) :: latConst
-  real(dp), allocatable :: coords(:,:)
+  real(dp), allocatable :: coords(:,:), grad1(:,:), grad2(:,:)
   real(dp), allocatable :: charges(:), pot1(:), pot2(:)
   real(dp) :: alpha, tolerance
   character(20) :: formStr
@@ -29,11 +29,15 @@ program test
 
   allocate(pot1(nAtom))
   allocate(pot2(nAtom))
+  allocate(grad1(3, nAtom))
+  allocate(grad2(3, nAtom))
 
   call init(ewaldCalc, nAtom, alpha, tolerance)
   call setLatticeVectors(ewaldCalc, latVecs)
   call getPeriodicPotential(ewaldCalc, coords, charges, pot1)
   call getCentralPotential(ewaldCalc, coords, charges, pot2)
+  call getPeriodicGradient(ewaldCalc, coords, charges, grad1)
+  call getCentralGradient(ewaldCalc, coords, charges, grad2)
 
   write(stdOut, "(A)") "Full periodic electrostatic potential:"
   write(stdOut, "(E20.12)") pot1
@@ -41,5 +45,12 @@ program test
   write(stdOut, "(E20.12)") pot2
   write(stdOut, "(A)") "Difference:"
   write(stdOut, "(E20.12)") pot1 - pot2
-  
+
+  write(stdOut, "(A)") "Full periodic electrostatic gradient:"
+  write(stdOut, "(3E20.12)") grad1
+  write(stdOut, "(A)") "Electrostatic gradient contribution from central cell:"
+  write(stdOut, "(3E20.12)") grad2
+  write(stdOut, "(A)") "Difference:"
+  write(stdOut, "(3E20.12)") grad1 - grad2
+
 end program test

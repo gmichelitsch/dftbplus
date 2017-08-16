@@ -10,6 +10,7 @@ module dftbp_api_ewald
 
   public :: EwaldCalculator
   public :: init, setLatticeVectors, getPeriodicPotential, getCentralPotential
+  public :: getPeriodicGradient, getCentralGradient
 
 
   type :: EwaldCalculator
@@ -37,6 +38,14 @@ module dftbp_api_ewald
   interface getCentralPotential
     module procedure EwaldCalculator_getCentralPotential
   end interface getCentralPotential
+
+  interface getPeriodicGradient
+    module procedure EwaldCalculator_getPeriodicGradient
+  end interface getPeriodicGradient
+
+  interface getCentralGradient
+    module procedure EwaldCalculator_getCentralGradient
+  end interface getCentralGradient
   
 
 contains
@@ -94,7 +103,7 @@ contains
   subroutine EwaldCalculator_getCentralPotential(this, coords, charges, potential)
 
     !> Instance
-    type(EwaldCalculator), intent(inout) :: this
+    type(EwaldCalculator), intent(in) :: this
 
     !> Coordinates of the atoms. Shape: (3, nAtom).
     real(dp), intent(in) :: coords(:,:)
@@ -114,7 +123,7 @@ contains
   subroutine EwaldCalculator_getPeriodicPotential(this, coords, charges, potential)
 
     !> Instance
-    type(EwaldCalculator), intent(inout) :: this
+    type(EwaldCalculator), intent(in) :: this
 
     !> Coordinates of the atoms. Shape: (3, nAtom).
     real(dp), intent(in) :: coords(:,:)
@@ -125,10 +134,58 @@ contains
     !> Resulting potential. Shape: (nAtom)
     real(dp), intent(out) :: potential(:)
 
+    ! Use the asymmetric ewald routine as this uses summation and needs no neighbour lists
     call sumInvR(potential, this%nAtom, this%nAtom, coords, coords, charges, this%rCellVecs,&
         & this%gCellVecs, this%alpha, this%cellVol)
     
   end subroutine EwaldCalculator_getPeriodicPotential
+
+
+  !> Returns the gradient of the electrostatic potential considering atoms in the central cell only.
+  subroutine EwaldCalculator_getCentralGradient(this, coords, charges, gradient)
+
+    !> Instance
+    type(EwaldCalculator), intent(in) :: this
+
+    !> Coordinates of the atom. Shape: (3, nAtom)
+    real(dp), intent(in) :: coords(:,:)
+
+    !> Charges of the atoms. Shape: (nAtom)
+    real(dp), intent(in) :: charges(:)
+
+    !> Resulting gradients. Shape: (3, nAtom)
+    real(dp), intent(out) :: gradient(:,:)
+
+    gradient(:,:) = 0.0_dp
+    call addInvRPrime(gradient, this%nAtom, coords, charges)
+    
+  end subroutine EwaldCalculator_getCentralGradient
+
+
+  !> Returns the gradient of the electrostatic potential considering all periodic images
+  subroutine EwaldCalculator_getPeriodicGradient(this, coords, charges, gradient)
+
+    !> Instance
+    type(EwaldCalculator), intent(in) :: this
+
+    !> Coordinates of the atom. Shape: (3, nAtom)
+    real(dp), intent(in) :: coords(:,:)
+
+    !> Charges of the atoms. Shape: (nAtom)
+    real(dp), intent(in) :: charges(:)
+
+    !> Resulting gradients. Shape: (3, nAtom)
+    real(dp), intent(out) :: gradient(:,:)
+
+    real(dp), allocatable :: dummy(:,:)
+
+    allocate(dummy(3, this%nAtom))
+    gradient(:,:) = 0.0_dp
+    ! Use the asymmetric ewald routine as this needs no neighbour lists
+    call addInvRPrime(gradient, dummy, this%nAtom, this%nAtom, coords, coords, charges, charges,&
+        & this%rCellVecs, this%gCellVecs, this%alpha, this%cellVol)
+    
+  end subroutine EwaldCalculator_getPeriodicGradient
     
 
 end module dftbp_api_ewald

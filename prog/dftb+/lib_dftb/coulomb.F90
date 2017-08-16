@@ -622,9 +622,9 @@ contains
               &* charge0(iAt0) * charge1(iAt1)
           deriv0(:,iAt0) = deriv0(:,iAt0) + fTmp(:)
           deriv1(:,iAt1) = deriv1(:,iAt1) - fTmp(:)
-        else
-          write (error_string, ftTooClose) iAt0, iAt1
-          call error(trim(error_string))
+        !else
+        !  write (error_string, ftTooClose) iAt0, iAt1
+        !  call error(trim(error_string))
         end if
       end do
     end do
