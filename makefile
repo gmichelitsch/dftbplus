@@ -8,12 +8,12 @@
 ROOT := $(PWD)
 
 .PHONY: default misc all
-default: dftb+ modes waveplot
+default: dftb+ modes waveplot phonons
 misc: misc_skderivs misc_slakovalue
 all: default misc
 
 .PHONY: install install_misc install_all
-install: install_dftb+ install_modes install_waveplot install_dptools
+install: install_dftb+ install_modes install_waveplot install_phonons install_dptools
 install_misc: install_misc_skderivs install_misc_slakovalue
 
 .PHONY: test
@@ -42,8 +42,8 @@ update_release:
         || $(ROOT)/utils/build/update_release $(BUILDDIR)/RELEASE \
         || echo "(UNKNOWN RELEASE)" > $(BUILDDIR)/RELEASE
 
-.PHONY: dftb+ modes waveplot
-dftb+ modes waveplot:
+.PHONY: dftb+ modes waveplot phonons
+dftb+ modes waveplot phonons:
 	mkdir -p $(BUILDDIR)/prog/$@
 	$(MAKE) -C $(BUILDDIR)/prog/$@ -f $(ROOT)/prog/$@/make.build \
 	    ROOT=$(ROOT) BUILDROOT=$(BUILDDIR)
@@ -65,7 +65,7 @@ dftb+: external_mudpack
 endif	
 modes: external_xmlf90
 waveplot: external_xmlf90
-
+phonons: external_xmlf90
 
 .PHONY: misc_skderivs misc_slakovalue
 misc_skderivs misc_slakovalue:
@@ -111,8 +111,8 @@ test_dptools:
 # Install targets
 ################################################################################
 
-.PHONY: install_dftb+ install_modes install_waveplot
-install_dftb+ install_modes install_waveplot:
+.PHONY: install_dftb+ install_modes install_waveplot install_phonons
+install_dftb+ install_modes install_waveplot install_phonons:
 	$(MAKE) -C $(BUILDDIR)/prog/$(subst install_,,$@) \
 	    -f $(ROOT)/prog/$(subst install_,,$@)/make.build \
 	    ROOT=$(ROOT) BUILDROOT=$(BUILDDIR) install
@@ -120,6 +120,7 @@ install_dftb+ install_modes install_waveplot:
 install_dftb+: dftb+
 install_modes: modes
 install_waveplot: waveplot
+install_phonons: phonons
 
 
 .PHONY: install_misc_skderivs install_misc_slakovalue
