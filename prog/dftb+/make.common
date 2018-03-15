@@ -134,6 +134,7 @@ endif
 ifeq ($(strip $(WITH_PROGRESS)),1)
   L_LIBS += $(PROGRESS_LIBS)
   L_INCS += $(PROGRESS_INCS)
+  FYPPOPT += -DWITH_PROGRESS
 endif
 
 ifeq ($(strip $(WITH_MPI)),1)

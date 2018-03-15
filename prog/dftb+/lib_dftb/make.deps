@@ -220,6 +220,11 @@ slakoeqgrid.o = slakoeqgrid.o $(_mod_accuracy) $(_mod_message) $(common.fypp) $(
 _mod_slakoeqgrid: slakoeqgrid.o
 _mod_slakoeqgrid = $(slakoeqgrid.o)
 
+sparse2bml.o: _mod_bmlprogress _mod_commontypes common.fypp _mod_accuracy _mod_constants
+sparse2bml.o = sparse2bml.o $(_mod_bmlprogress) $(_mod_commontypes) $(common.fypp) $(_mod_accuracy) $(_mod_constants)
+_mod_sparse2bml: sparse2bml.o
+_mod_sparse2bml = $(sparse2bml.o)
+
 #:if WITH_SCALAPACK
 sparse2dense.o: _mod_commontypes common.fypp _mod_memman _mod_constants _mod_densedescr _mod_assert _mod_periodic _mod_accuracy _mod_blacsenv _mod_scalapackfx
 sparse2dense.o = sparse2dense.o $(_mod_commontypes) $(common.fypp) $(_mod_memman) $(_mod_constants) $(_mod_densedescr) $(_mod_assert) $(_mod_periodic) $(_mod_accuracy) $(_mod_blacsenv) $(_mod_scalapackfx)
@@ -230,6 +235,18 @@ sparse2dense.o: _mod_commontypes common.fypp _mod_memman _mod_constants _mod_den
 sparse2dense.o = sparse2dense.o $(_mod_commontypes) $(common.fypp) $(_mod_memman) $(_mod_constants) $(_mod_densedescr) $(_mod_assert) $(_mod_periodic) $(_mod_accuracy)
 _mod_sparse2dense: sparse2dense.o
 _mod_sparse2dense = $(sparse2dense.o)
+#:endif
+
+#:if WITH_SCALAPACK
+spase2bml.o: _mod_commontypes common.fypp _mod_memman _mod_constants _mod_densedescr _mod_assert _mod_periodic _mod_accuracy _mod_blacsenv _mod_scalapackfx
+spase2bml.o = spase2bml.o $(_mod_commontypes) $(common.fypp) $(_mod_memman) $(_mod_constants) $(_mod_densedescr) $(_mod_assert) $(_mod_periodic) $(_mod_accuracy) $(_mod_blacsenv) $(_mod_scalapackfx)
+_mod_sparse2dense: spase2bml.o
+_mod_sparse2dense = $(spase2bml.o)
+#:else
+spase2bml.o: _mod_commontypes common.fypp _mod_memman _mod_constants _mod_densedescr _mod_assert _mod_periodic _mod_accuracy
+spase2bml.o = spase2bml.o $(_mod_commontypes) $(common.fypp) $(_mod_memman) $(_mod_constants) $(_mod_densedescr) $(_mod_assert) $(_mod_periodic) $(_mod_accuracy)
+_mod_sparse2dense: spase2bml.o
+_mod_sparse2dense = $(spase2bml.o)
 #:endif
 
 spin.o: _mod_commontypes common.fypp _mod_message _mod_shift _mod_assert _mod_accuracy

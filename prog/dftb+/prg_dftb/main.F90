@@ -16,6 +16,9 @@ module main
   use scalapackfx
   use scalafxext
 #:endif
+#:if WITH_PROGRESS
+  use sparse2bml
+#:endif  
   use assert
   use constants
   use globalenv
