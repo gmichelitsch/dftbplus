@@ -88,6 +88,15 @@ FYPPOPT = -DINTERNAL_ERFC -DEXP_TRAP
 # Library options in general
 LIBOPT = 
 
+# BML and progress libraries in case code is compiled with PROGRESS support
+ifeq ($(strip $(WITH_PROGRESS)),1)
+BML_ROOT = /opt/bml
+PROGRESS_ROOT = /opt/qmd-progress
+PROGRESS_INCS = -I$(BML_ROOT)/include -I$(PROGRESS_ROOT)/include
+PROGRESS_LIBS = -L$(PROGRESS_ROOT)/lib -lprogress -L$(BML_ROOT)/lib \
+    -lbml_fortran -lbml
+endif
+
 ############################################################################
 # Developer settings
 ############################################################################

@@ -24,9 +24,18 @@ check: check_dptools
 
 include make.config
 
+################################################################################
+# Sanity checks
+################################################################################
+
 # Check whether DEBUG level is correct
 ifeq ($(filter 0 1 2,$(strip $(DEBUG))),)
   $(error 'Invalid value $(DEBUG) for DEBUG (must be 0, 1 or 2)')
+endif
+
+# Check whether PROGRESS use serial compilation
+ifeq ($(strip $(WITH_PROGRESS))$(strip $(WITH_MPI)),11)
+  $(error 'The PROGRESS library can not be used in MPI binaries')
 endif
 
 ################################################################################

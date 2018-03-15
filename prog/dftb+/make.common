@@ -131,6 +131,10 @@ ifeq ($(strip $(WITH_DFTD3)),1)
   L_INCS += $(DFTD3_INCS)
 endif
 
+ifeq ($(strip $(WITH_PROGRESS)),1)
+  L_LIBS += $(PROGRESS_LIBS)
+  L_INCS += $(PROGRESS_INCS)
+endif
 
 ifeq ($(strip $(WITH_MPI)),1)
   #
