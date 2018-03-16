@@ -163,7 +163,7 @@ contains
     !Parse input file.
     if(.not.initz)then
        call prg_parse_zsp(zsp,"progress.in")
-       if(zsp%mdim < 0)mdim = orb%norb
+       if(zsp%mdim < 0) zsp%mdim = orb%norb
        initz = .true.
     endif
 
@@ -180,7 +180,7 @@ contains
     !From dftb+ to bml format
     call foldToRealBml(over, neighborList%iNeighbor, nNeighbor, orb, &
          denseDesc%iAtomStart, iSparseStart, img2CentCell, over_bml) !, sp2%threshold)
-stop
+
     if(zsp%zsp)then !Congruence transformation.
        !Build Z using the technique implemented in http://pubs.acs.org/doi/abs/10.1021/acs.jctc.6b00154
        call prg_buildzsparse(over_bml,zmat_bml,igenz,zsp%mdim,&

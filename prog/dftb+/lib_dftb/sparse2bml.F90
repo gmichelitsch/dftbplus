@@ -44,7 +44,7 @@ contains
 
     !> Indexing array for the sparse Hamiltonian.
     integer, intent(in) :: iPair(0:,:)
-    
+
     !> Atomic mapping indexes
     integer, intent(in) :: img2CentCell(:)
 
@@ -54,7 +54,7 @@ contains
     real(dp), allocatable :: buffer(:,:)
     integer :: iAt1, iAt2f, iNeigh, iOrb
     integer :: nAtom, nOrb1, nOrb2, globCol, globRow, indSparse
-        
+
     nAtom = size(iNeighbor, dim=2)
     allocate(buffer(orb%nOrb, orb%mOrb))
     do iAt1 = 1, size(iNeighbor, dim=2)
@@ -74,10 +74,11 @@ contains
         call bml_set_row(bmlMatrix, globCol + iOrb - 1, buffer(:, iOrb))
       end do
     end do
-    call bml_transpose_triangle(bmlMatrix, "u")
-    
+
+    call bml_adjungate_triangle(bmlMatrix, "u")
+
   end subroutine foldToRealBml
-  
+
 
   !> Folds sparse matrix to ELL format as used in the BML library (complex).
   !>
@@ -153,7 +154,7 @@ contains
       end do
     end do
     call bml_adjungate_triangle(bmlMatrix, "u")
-    
+
   end subroutine foldToComplexBml
 
 
@@ -211,10 +212,10 @@ contains
             & + reshape(buffer(globRow : globRow + nOrb2 - 1, 1:nOrb1), [nOrb1 * nOrb2])
       end do
     end do
-        
+
   end subroutine unfoldFromRealBml
 
-  
+
   !> Unfolds the contribution of a BML matrix to the sparse form (complex).
   !>
   !> The unfolded matrix is *added* to the sparse one weighted by the passed k-point weight.
@@ -298,8 +299,8 @@ contains
             & [nOrb1 * nOrb2]), dp)
       end do
     end do
-        
+
   end subroutine unfoldFromComplexBml
 
-  
+
 end module sparse2bml
