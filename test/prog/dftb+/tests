@@ -5,6 +5,7 @@
 #:include 'common.fypp'
 
 progress/h2o_dense                     #? WITH_PROGRESS 
+progress/h2o_ellpack                   #? WITH_PROGRESS 
  
 derivatives/Si_2_Delta                 #? MPI_PROCS <= 1
 legacy/Si2_oldSKinterp                 #? MPI_PROCS <= 1
