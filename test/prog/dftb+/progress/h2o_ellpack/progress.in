@@ -5,20 +5,20 @@ SP2{
   MaxSP2Iter=  100
   Verbose=     3
   NumThresh=   1.0d-5     
-  BMLType=     Dense
+  BMLType=     Ellpack
   SP2Conv=     REL                                                                                                 
   Flavor=      Alg1                                                                                                
 }          
 
 ZSP{                                              
   Verbose=     0
-  NFirst=      10
+  NFirst=      5
   NRefI=       3
   NRefF=       1
   MDim=       -1
   NumthreshI=  1.0d-8
   NumthreshF=  1.0d-5
-  BMLType=     Dense                                                                                  
-  ZSP=         F
+  BMLType=     Ellpack                                                                                      
+  ZSP=         T
   Int=         T
 }   
