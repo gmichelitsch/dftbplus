@@ -15,7 +15,6 @@ ZSP{
   NFirst=      10
   NRefI=       3
   NRefF=       1
-  MDim=       -1
   NumthreshI=  1.0d-8
   NumthreshF=  1.0d-5
   BMLType=     Dense                                                                                  
