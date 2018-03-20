@@ -1636,21 +1636,189 @@ contains
       end if
     end if
 
+    call qm2ud(ham)
+
+    select case (solver%solverType)
+
+    case (solverTypes%lapackQr, solverTypes%lapackDivAndConq, solverTypes%lapackRelRobust)
+      call getDensityByDenseDiag(env, denseDesc, ham, over, neighborList, nNeighbor,&
+          & iSparseStart, img2CentCell, iCellVec, cellVec, kPoint, kWeight, orb, species, solver,&
+          & tRealHS, tSpinSharedEf, tSpinOrbit, tDualSpinOrbit, tFillKSep, tFixEf, tMulliken,&
+          & iDistribFn, tempElec, nEl, parallelKS, Ef, energy, eigen, filling, rhoPrim, Eband, TS,&
+          & E0, iHam, xi, orbitalL, HSqrReal, SSqrReal, eigvecsReal, iRhoPrim, HSqrCplx, SSqrCplx,&
+          & eigvecsCplx, rhoSqrReal)
+
+    case (solverTypes%progressSp2)
+      if (.not. tRealHS .or. nSpin == 4) then
+        call error("Internal error: SP2 solver does not work with complex Hamiltonian or&
+            & non-colinear spin")
+      end if
+      call getDensityBySp2(env, denseDesc, ham, neighborList, nNeighbor, iSparseStart,&
+          & img2CentCell, orb, solver, nEl, parallelKS, rhoPrim)
+
+    case default
+      call error("Internal error: invalid solver type in getDensity")
+
+    end select
+
+    call ud2qm(rhoPrim)
+
+  end subroutine getDensity
+
+
+  subroutine getDensityByDenseDiag(env, denseDesc, ham, over, neighborList, nNeighbor,&
+      & iSparseStart, img2CentCell, iCellVec, cellVec, kPoint, kWeight, orb, species, solver,&
+      & tRealHS, tSpinSharedEf, tSpinOrbit, tDualSpinOrbit, tFillKSep, tFixEf, tMulliken,&
+      & iDistribFn, tempElec, nEl, parallelKS, Ef, energy, eigen, filling, rhoPrim, Eband, TS, E0,&
+      & iHam, xi, orbitalL, HSqrReal, SSqrReal, eigvecsReal, iRhoPrim, HSqrCplx, SSqrCplx,&
+      & eigvecsCplx, rhoSqrReal)
+
+    !> Environment settings
+    type(TEnvironment), intent(inout) :: env
+
+    !> Dense matrix descriptor
+    type(TDenseDescr), intent(in) :: denseDesc
+
+    !> hamiltonian in sparse storage
+    real(dp), intent(in) :: ham(:,:)
+
+    !> sparse overlap matrix
+    real(dp), intent(in) :: over(:)
+
+    !> list of neighbours for each atom
+    type(TNeighborList), intent(in) :: neighborList
+
+    !> Number of neighbours for each of the atoms
+    integer, intent(in) :: nNeighbor(:)
+
+    !> Index array for the start of atomic blocks in sparse arrays
+    integer, intent(in) :: iSparseStart(:,:)
+
+    !> map from image atoms to the original unique atom
+    integer, intent(in) :: img2CentCell(:)
+
+    !> Index for which unit cell atoms are associated with
+    integer, intent(in) :: iCellVec(:)
+
+    !> Vectors (in units of the lattice constants) to cells of the lattice
+    real(dp), intent(in) :: cellVec(:,:)
+
+    !> k-points
+    real(dp), intent(in) :: kPoint(:,:)
+
+    !> Weights for k-points
+    real(dp), intent(in) :: kWeight(:)
+
+    !> Atomic orbital information
+    type(TOrbitals), intent(in) :: orb
+
+    !> species of all atoms in the system
+    integer, intent(in) :: species(:)
+
+    !> Eigensolver choice
+    type(TSolver), intent(in) :: solver
+
+    !> Is the hamitonian real (no k-points/molecule/gamma point)?
+    logical, intent(in) :: tRealHS
+
+    !> Is the Fermi level common accross spin channels?
+    logical, intent(in) :: tSpinSharedEf
+
+    !> Are spin orbit interactions present
+    logical, intent(in) :: tSpinOrbit
+
+    !> Are block population spin orbit interactions present
+    logical, intent(in) :: tDualSpinOrbit
+
+    !> Fill k-points separately if true (no charge transfer accross the BZ)
+    logical, intent(in) :: tFillKSep
+
+    !> Whether fixed Fermi level(s) should be used. (No charge conservation!)
+    logical, intent(in) :: tFixEf
+
+    !> Should Mulliken populations be generated/output
+    logical, intent(in) :: tMulliken
+
+    !> occupation function for electronic states
+    integer, intent(in) :: iDistribFn
+
+    !> Electronic temperature
+    real(dp), intent(in) :: tempElec
+
+    !> Number of electrons
+    real(dp), intent(in) :: nEl(:)
+
+    !> K-points and spins to process
+    type(TParallelKS), intent(in) :: parallelKS
+
+    !> Fermi level(s)
+    real(dp), intent(inout) :: Ef(:)
+
+    !> Energy contributions and total
+    type(TEnergies), intent(inout) :: energy
+
+    !> eigenvalues
+    real(dp), intent(out) :: eigen(:,:,:)
+
+    !> occupations
+    real(dp), intent(out) :: filling(:,:,:)
+
+    !> sparse density matrix
+    real(dp), intent(out) :: rhoPrim(:,:)
+
+    !> band structure energy
+    real(dp), intent(out) :: Eband(:)
+
+    !> electronic entropy times temperature
+    real(dp), intent(out) :: TS(:)
+
+    !> extrapolated 0 temperature band energy
+    real(dp), intent(out) :: E0(:)
+
+    !> imaginary part of hamitonian
+    real(dp), intent(in), allocatable :: iHam(:,:)
+
+    !> spin orbit constants
+    real(dp), intent(in), allocatable :: xi(:,:)
+
+    !> orbital moments of atomic shells
+    real(dp), intent(inout), allocatable :: orbitalL(:,:,:)
+
+    !> imaginary part of density matrix
+    real(dp), intent(inout), allocatable :: iRhoPrim(:,:)
+
+    !> dense real hamiltonian storage
+    real(dp), intent(inout), allocatable :: HSqrReal(:,:)
+
+    !> dense real overlap storage
+    real(dp), intent(inout), allocatable :: SSqrReal(:,:)
+
+    !> real eigenvectors on exit
+    real(dp), intent(inout), allocatable :: eigvecsReal(:,:,:)
+
+    !> dense complex (k-points) hamiltonian storage
+    complex(dp), intent(inout), allocatable :: HSqrCplx(:,:)
+
+    !> dense complex (k-points) overlap storage
+    complex(dp), intent(inout), allocatable :: SSqrCplx(:,:)
+
+    !> complex eigenvectors on exit
+    complex(dp), intent(inout), allocatable :: eigvecsCplx(:,:,:)
+
+    !> Dense density matrix
+    real(dp), intent(inout), allocatable :: rhoSqrReal(:,:,:)
+
+    integer :: nSpin
+
+    nSpin = size(ham, dim=2)
+
     call env%globalTimer%startTimer(globalTimers%diagonalization)
+
     if (nSpin /= 4) then
-      call qm2ud(ham)
       if (tRealHS) then
-        select case (solver%solverType)
-        case (solverTypes%lapackQr, solverTypes%lapackDivAndConq, solverTypes%lapackRelRobust) 
-          call buildAndDiagDenseRealHam(env, denseDesc, ham, over, neighborList, nNeighbor,&
-              & iSparseStart, img2CentCell, solver, parallelKS, HSqrReal, SSqrReal, eigVecsReal,&
-              & eigen(:,1,:))
-      #:if WITH_PROGRESS
-        case(solverTypes%progressSp2)
-          call solver%sp2Solver%getDensity(ham, neighborList, nNeighbor, iSparseStart,&
-              & img2CentCell, parallelKS, denseDesc, orb, nEl, rhoPrim)
-      #:endif
-        end select
+        call buildAndDiagDenseRealHam(env, denseDesc, ham, over, neighborList, nNeighbor,&
+            & iSparseStart, img2CentCell, solver, parallelKS, HSqrReal, SSqrReal, eigVecsReal,&
+            & eigen(:,1,:))
       else
         call buildAndDiagDenseCplxHam(env, denseDesc, ham, over, kPoint, neighborList, nNeighbor,&
             & iSparseStart, img2CentCell, iCellVec, cellVec, solver, parallelKS, HSqrCplx,&
@@ -1661,26 +1829,23 @@ contains
           & iSparseStart, img2CentCell, iCellVec, cellVec, orb, solver, parallelKS, eigen(:,:,1),&
           & HSqrCplx, SSqrCplx, eigVecsCplx, iHam, xi, species)
     end if
+
     call env%globalTimer%stopTimer(globalTimers%diagonalization)
     
-    if (solver%solverType /= solverTypes%progressSp2) then
-      call getFillingsAndBandEnergies(eigen, nEl, nSpin, tempElec, kWeight, tSpinSharedEf,&
-          & tFillKSep, tFixEf, iDistribFn, Ef, filling, Eband, TS, E0)
-    end if
+    call getFillingsAndBandEnergies(eigen, nEl, nSpin, tempElec, kWeight, tSpinSharedEf,&
+        & tFillKSep, tFixEf, iDistribFn, Ef, filling, Eband, TS, E0)
+
     call env%globalTimer%startTimer(globalTimers%densityMatrix)
     if (nSpin /= 4) then
       if (tRealHS) then
-        if (solver%solverType /= solverTypes%progressSp2) then
-          call getDensityFromRealEigvecs(env, denseDesc, filling(:,1,:), neighborList, nNeighbor,&
-              & iSparseStart, img2CentCell, orb, eigVecsReal, parallelKS, rhoPrim, SSqrReal,&
-              & rhoSqrReal)
-        end if
+        call getDensityFromRealEigvecs(env, denseDesc, filling(:,1,:), neighborList, nNeighbor,&
+            & iSparseStart, img2CentCell, orb, eigVecsReal, parallelKS, rhoPrim, SSqrReal,&
+            & rhoSqrReal)
       else
         call getDensityFromCplxEigvecs(env, denseDesc, filling, kPoint, kWeight, neighborList,&
             & nNeighbor, iSparseStart, img2CentCell, iCellVec, cellVec, orb, parallelKS,&
             & eigvecsCplx, rhoPrim, SSqrCplx)
       end if
-      call ud2qm(rhoPrim)
     else
       ! Pauli structure of eigenvectors
       filling(:,:,1) = 2.0_dp * filling(:,:,1)
@@ -1693,7 +1858,78 @@ contains
 
     call env%globalTimer%stopTimer(globalTimers%densityMatrix)
 
-  end subroutine getDensity
+  end subroutine getDensityByDenseDiag
+
+
+  !> Obtains the density by using the SP2 method
+  subroutine getDensityBySp2(env, denseDesc, ham, neighborList, nNeighbor, iSparseStart,&
+      & img2CentCell, orb, solver, nEl, parallelKS, rhoPrim)
+
+    !> Environment settings
+    type(TEnvironment), intent(inout) :: env
+
+    !> Dense matrix descriptor
+    type(TDenseDescr), intent(in) :: denseDesc
+
+    !> hamiltonian in sparse storage
+    real(dp), intent(in) :: ham(:,:)
+
+    !> list of neighbours for each atom
+    type(TNeighborList), intent(in) :: neighborList
+
+    !> Number of neighbours for each of the atoms
+    integer, intent(in) :: nNeighbor(:)
+
+    !> Index array for the start of atomic blocks in sparse arrays
+    integer, intent(in) :: iSparseStart(:,:)
+
+    !> map from image atoms to the original unique atom
+    integer, intent(in) :: img2CentCell(:)
+
+    !> Atomic orbital information
+    type(TOrbitals), intent(in) :: orb
+
+    !> Eigensolver choice
+    type(TSolver), intent(inout) :: solver
+
+    !> Number of electrons
+    real(dp), intent(in) :: nEl(:)
+
+    !> K-points and spins to process
+    type(TParallelKS), intent(in) :: parallelKS
+
+    !> sparse density matrix
+    real(dp), intent(out) :: rhoPrim(:,:)
+
+    real(dp) :: normFac, nElNormed
+    integer :: nSpin
+    integer :: iKS, iSpin
+
+    call env%globalTimer%startTimer(globalTimers%densityMatrix)
+
+    nSpin = size(ham, dim=2)
+
+    ! SP2-solver needs idempotent density matrix with fillings 0 <= f <= 1.
+    if (nSpin == 1) then
+      normFac = 0.5_dp
+    else
+      normFac = 1.0_dp
+    end if
+
+    do iKS = 1, parallelKS%nLocalKS
+      iSpin = parallelKS%localKS(2, iKS)
+      nElNormed = nEl(iSpin) * normFac
+    #:if WITH_PROGRESS
+      call solver%sp2Solver%getDensity(ham(:,iSpin), neighborList, nNeighbor, iSparseStart,&
+          & img2CentCell, parallelKS, denseDesc, orb, nElNormed, rhoPrim(:,iSpin))
+    #:else
+      call error("Internal error: getDensityBySp2 called despite missing Progress support")
+    #:endif
+    end do
+      
+    call env%globalTimer%stopTimer(globalTimers%densityMatrix)
+
+  end subroutine getDensityBySp2
 
 
   !> Builds and diagonalises dense Hamiltonians.

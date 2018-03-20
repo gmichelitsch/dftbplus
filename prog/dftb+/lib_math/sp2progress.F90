@@ -30,8 +30,10 @@ module sp2progress
   public :: TSp2Solver
 
 
+  !> Contains the internal parameters for the SP2 solver
   type :: TSp2Solver
     private
+
     integer :: iGenZ = 0
     logical :: tInitSp2 = .false.
     logical :: tInitZ = .false.
@@ -61,7 +63,7 @@ contains
   subroutine TSp2Solver_getDensity(this, ham, neighborList, nNeighbor, iSparseStart,&
       & img2CentCell, parallelKS, denseDesc, orb, nEl, rhoPrim)
     class(TSp2Solver), intent(inout) :: this
-    real(dp), intent(in) ::  ham(:,:)
+    real(dp), intent(in) ::  ham(:)
     type(TNeighborList), intent(in) :: neighborList
     integer, intent(in) :: nNeighbor(:)
     integer, intent(in) :: iSparseStart(:,:)
@@ -69,15 +71,12 @@ contains
     type(TParallelKS), intent(in) :: parallelKS
     type(TDenseDescr), intent(in) :: denseDesc
     type(TOrbitals), intent(in) :: orb
-    real(dp), intent(in) :: nEl(:)
-    real(dp), intent(out) :: rhoPrim(:,:)
+    real(dp), intent(in) :: nEl
+    real(dp), intent(out) :: rhoPrim(:)
     
     real(dp) ::  bandFilling
-    integer ::  iSpin
     character(100) :: errorStr
 
-    print *, "CALLIING SP2 get Density"
-    
     ! Parsing sp2 input parameters.
     if (.not. this%tInitSp2)then
       call prg_parse_sp2(this%sp2, "progress.in")
@@ -97,25 +96,20 @@ contains
           & " versus ", bml_get_M(this%zMat), ")"
     endif
 
-    iSpin = parallelKS%localKS(2, 1)
     call bml_zero_matrix(this%sp2%bml_type, bml_element_real, dp, orb%norb, this%sp2%mdim, this%ham)
     call bml_zero_matrix(this%sp2%bml_type, bml_element_real, dp, orb%norb, this%sp2%mdim,&
         & this%orthoH)
     call bml_zero_matrix(this%sp2%bml_type, bml_element_real, dp, orb%norb, this%sp2%mdim,&
         & this%orthoRho)
 
-    if (bml_get_N(this%ham) > orb%norb) then
-      call bml_clear(this%ham)
-    end if
-
-    call foldToRealBml(ham(:,iSpin), neighborList%iNeighbor, nNeighbor, orb, denseDesc%iAtomStart,&
+    call foldToRealBml(ham, neighborList%iNeighbor, nNeighbor, orb, denseDesc%iAtomStart,&
         & iSparseStart, img2CentCell, this%ham)
 
     call prg_orthogonalize(this%ham, this%zMat, this%orthoH, this%sp2%threshold, this%sp2%bml_type,&
         & this%sp2%verbose)
 
     ! WARNING: Works only for spin unpolarized cases
-    bandFilling = (nEl(iSpin) / 2.00_dp) / real(orb%nOrb, dp)
+    bandFilling = nEl / real(orb%nOrb, dp)
 
     ! Perform SP2 from progress
     if (this%sp2%flavor == "Basic")then
@@ -147,9 +141,9 @@ contains
     call bml_deallocate(this%orthoRho)
 
     ! Transforming rho from bml to sparse dftb+.
-    rhoPrim(:,:) = 0.0_dp
+    rhoPrim(:) = 0.0_dp
     call unfoldFromRealBml(this%rho, neighborList%iNeighbor, nNeighbor, orb, denseDesc%iAtomStart,&
-        & iSparseStart, img2CentCell, rhoPrim(:,iSpin))
+        & iSparseStart, img2CentCell, rhoPrim)
 
   end subroutine TSp2Solver_getDensity
 
