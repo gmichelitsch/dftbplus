@@ -415,7 +415,7 @@ contains
         call getEnergyWeightedDensity(env, denseDesc, forceType, filling, eigen, kPoint, kWeight,&
             & neighborList, nNeighbor, orb, iSparseStart, img2CentCell, iCellVec, cellVec,&
             & tRealHS, ham, over, parallelKS, ERhoPrim, eigvecsReal, SSqrReal, eigvecsCplx,&
-            & SSqrCplx)
+            & SSqrCplx, rhoSqrReal)
         call env%globalTimer%stopTimer(globalTimers%energyDensityMatrix)
         call getGradients(env, sccCalc, tEField, tXlbomd, nonSccDeriv, Efield, rhoPrim, ERhoPrim,&
             & qOutput, q0, skHamCont, skOverCont, pRepCont, neighborList, nNeighbor, species,&
@@ -1654,7 +1654,7 @@ contains
             & non-colinear spin")
       end if
       call getDensityBySp2(env, denseDesc, ham, neighborList, nNeighbor, iSparseStart,&
-          & img2CentCell, orb, solver, nEl, parallelKS, rhoPrim)
+          & img2CentCell, orb, solver, nEl, parallelKS, rhoPrim, rhoSqrReal)
 
     case default
       call error("Internal error: invalid solver type in getDensity")
@@ -1863,7 +1863,7 @@ contains
 
   !> Obtains the density by using the SP2 method
   subroutine getDensityBySp2(env, denseDesc, ham, neighborList, nNeighbor, iSparseStart,&
-      & img2CentCell, orb, solver, nEl, parallelKS, rhoPrim)
+      & img2CentCell, orb, solver, nEl, parallelKS, rhoPrim, rhoSqrReal)
 
     !> Environment settings
     type(TEnvironment), intent(inout) :: env
@@ -1901,31 +1901,17 @@ contains
     !> sparse density matrix
     real(dp), intent(out) :: rhoPrim(:,:)
 
-    real(dp) :: normFac, nElNormed
-    integer :: nSpin
-    integer :: iKS, iSpin
+    !> Dense density matrix to be used for later purposes
+    real(dp), allocatable, intent(inout) :: rhoSqrReal(:,:,:)
 
     call env%globalTimer%startTimer(globalTimers%densityMatrix)
-
-    nSpin = size(ham, dim=2)
-
-    ! SP2-solver needs idempotent density matrix with fillings 0 <= f <= 1.
-    if (nSpin == 1) then
-      normFac = 0.5_dp
-    else
-      normFac = 1.0_dp
-    end if
-
-    do iKS = 1, parallelKS%nLocalKS
-      iSpin = parallelKS%localKS(2, iKS)
-      nElNormed = nEl(iSpin) * normFac
-    #:if WITH_PROGRESS
-      call solver%sp2Solver%getDensity(ham(:,iSpin), neighborList, nNeighbor, iSparseStart,&
-          & img2CentCell, denseDesc, orb, nElNormed, rhoPrim(:,iSpin))
-    #:else
-      call error("Internal error: getDensityBySp2 called despite missing Progress support")
-    #:endif
-    end do
+    
+  #:if WITH_PROGRESS
+    call solver%sp2Solver%getDensity(ham, neighborList, nNeighbor, iSparseStart,&
+        & img2CentCell, denseDesc, orb, nEl, parallelKS, rhoPrim, rhoSqrReal)
+  #:else
+    call error("Internal error: getDensityBySp2 called despite missing Progress support")
+  #:endif
       
     call env%globalTimer%stopTimer(globalTimers%densityMatrix)
 
@@ -3620,7 +3606,7 @@ contains
   !>
   subroutine getEnergyWeightedDensity(env, denseDesc, forceType, filling, eigen, kPoint, kWeight,&
       & neighborList, nNeighbor, orb, iSparseStart, img2CentCell, iCellVEc, cellVec, tRealHS, ham,&
-      & over, parallelKS, ERhoPrim, HSqrReal, SSqrReal, HSqrCplx, SSqrCplx)
+      & over, parallelKS, ERhoPrim, HSqrReal, SSqrReal, HSqrCplx, SSqrCplx, rhoSqrReal)
 
     !> Environment settings
     type(TEnvironment), intent(in) :: env
@@ -3691,6 +3677,9 @@ contains
     !> Storage for dense overlap matrix (complex case)
     complex(dp), intent(inout), allocatable :: SSqrCplx(:,:)
 
+    !> Density matrix in case it has been stored
+    real(dp), allocatable, intent(inout) :: rhoSqrReal(:,:,:)
+
     integer :: nSpin
 
     nSpin = size(ham, dim=2)
@@ -3702,7 +3691,7 @@ contains
     else if (tRealHS) then
       call getEDensityMtxFromRealEigvecs(env, denseDesc, forceType, filling, eigen, neighborList,&
           & nNeighbor, orb, iSparseStart, img2CentCell, ham, over, parallelKS, HSqrReal, SSqrReal,&
-          & ERhoPrim)
+          & ERhoPrim, rhoSqrReal)
     else
       call getEDensityMtxFromComplexEigvecs(env, denseDesc, forceType, filling, eigen, kPoint,&
           & kWeight, neighborList, nNeighbor, orb, iSparseStart, img2CentCell, iCellVec, cellVec,&
@@ -3715,7 +3704,7 @@ contains
   !> Calculates density matrix from real eigenvectors.
   subroutine getEDensityMtxFromRealEigvecs(env, denseDesc, forceType, filling, eigen, neighborList,&
       & nNeighbor, orb, iSparseStart, img2CentCell, ham, over, parallelKS, eigvecsReal, work,&
-      & ERhoPrim)
+      & ERhoPrim, rhoSqrReal)
 
     !> Environment settings
     type(TEnvironment), intent(in) :: env
@@ -3765,6 +3754,9 @@ contains
     !> Energy weighted density matrix
     real(dp), intent(out) :: ERhoPrim(:)
 
+    !> Density matrix in case it has been stored
+    real(dp), allocatable, intent(inout) :: rhoSqrReal(:,:,:)
+
     real(dp), allocatable :: work2(:,:)
     integer :: nSpin, nLocalRows, nLocalCols, nOrb
     integer :: iKS, iS
@@ -3812,7 +3804,11 @@ contains
         call unpackHS(work, ham(:,iS), neighborlist%iNeighbor, nNeighbor, denseDesc%iAtomStart,&
             & iSparseStart, img2CentCell)
         call blockSymmetrizeHS(work, denseDesc%iAtomStart)
-        call makeDensityMatrix(work2, eigvecsReal(:,:,iKS), filling(:,1,iS))
+        if (allocated(rhoSqrReal)) then
+          work2(:,:) = rhoSqrReal(:,:,iS)
+        else
+          call makeDensityMatrix(work2, eigvecsReal(:,:,iKS), filling(:,1,iS))
+        end if
         ! D H
         call symm(eigvecsReal(:,:,iKS), "L", work2, work)
         ! (D H) D

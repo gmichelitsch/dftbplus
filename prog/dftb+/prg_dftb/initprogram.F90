@@ -599,6 +599,8 @@ module initprogram
   !> data structure for 3rd order
   type(ThirdOrder), allocatable :: thirdOrd
 
+  !> Whether the dense density matrix should be kept for later processing
+  logical :: tKeepRhoSqr
 
   !> Calculate Casida linear response excitations
   logical :: tLinResp
@@ -1004,16 +1006,6 @@ contains
       maxSccIter = 1
     end if
 
-    solver%solverType = input%ctrl%iSolver
-    if (solver%solverType == solverTypes%progressSp2) then
-    #:if WITH_PROGRESS
-      allocate(solver%sp2Solver)
-      call TSp2Solver_init(solver%sp2Solver, nOrb)
-    #:else
-      call error("Can not use the SP2 solver as code was compiled without the Progress library")
-    #:endif
-    end if
-
     if (tPeriodic) then
       tLatticeChanged = .true.
       allocate(latVec(3, 3))
@@ -1410,7 +1402,9 @@ contains
     tBarostat = input%ctrl%tBarostat
     BarostatStrength = input%ctrl%BarostatStrength
 
-#:if WITH_SOCKETS
+
+    tForces = .false.
+  #:if WITH_SOCKETS
     tSocket = allocated(input%ctrl%socketInput)
     if (tSocket) then
       input%ctrl%socketInput%nAtom = nAtom
@@ -1420,9 +1414,9 @@ contains
       tGeoOpt = .false.
       tMD = .false.
     end if
-#:else
+  #:else
     tSocket = .false.
-#:endif
+  #:endif
 
     tAppendGeo = input%ctrl%tAppendGeo
     tUseConvergedForces = (input%ctrl%tConvrgForces .and. tSccCalc) ! no point if not SCC
@@ -1436,7 +1430,7 @@ contains
     tPrintEigVecsTxt = input%ctrl%tPrintEigVecsTxt
 
     tPrintForces = input%ctrl%tPrintForces
-    tForces = input%ctrl%tForces .or. tPrintForces
+    tForces = tForces .or. input%ctrl%tForces .or. tPrintForces
     if (tSccCalc) then
       forceType = input%ctrl%forceType
     else
@@ -1466,6 +1460,28 @@ contains
     ! requires stress to already be possible and it being a periodic calculation
     ! with forces
     tStress = ((tPeriodic .and. tForces).and.tStress)
+
+    tKeepRhoSqr = .false.
+    solver%solverType = input%ctrl%iSolver
+    if (solver%solverType == solverTypes%progressSp2) then
+      if (.not. tRealHS) then
+        call error("SP2 solver only works with real Hamiltonians so far")
+      end if
+      if (forceType /= 2) then
+        call error("SP2 solver only works with forceType = 2")
+      end if
+    #:if WITH_PROGRESS
+      allocate(solver%sp2Solver)
+      call TSp2Solver_init(solver%sp2Solver, nOrb)
+      if (tForces) then
+        tKeepRhoSqr = .true.
+      end if
+    #:else
+      call error("Can not use the SP2 solver as code was compiled without the Progress library")
+    #:endif
+    end if
+
+
 
     nMovedAtom = input%ctrl%nrMoved
     nMovedCoord = 3 * nMovedAtom
@@ -1723,10 +1739,12 @@ contains
       tPrintExcitedEigVecs = input%ctrl%lrespini%tPrintEigVecs
       tLinRespZVect = (input%ctrl%lrespini%tMulliken .or. tForces &
           & .or. input%ctrl%lrespini%tCoeffs .or. tPrintExcitedEigVecs)
+      tKeepRhoSqr = tKeepRhoSqr .or. tLinRespZVect
 
       call init(lresp, input%ctrl%lrespini, nAtom, nEl(1), orb)
 
     end if
+    
 
     iSeed = input%ctrl%iSeed
     tRandomSeed = (iSeed < 1)
@@ -2114,12 +2132,12 @@ contains
   #:endif
 
     call initArrays(env, tForces, tExtChrg, tLinResp, tLinRespZVect, tMd, tMulliken, tSpinOrbit,&
-        & tImHam, tWriteRealHS, tWriteHS, t2Component, tRealHS, tPrintExcitedEigvecs, tDipole, orb,&
-        & nAtom, nMovedAtom, nKPoint, nSpin, nExtChrg, indMovedAtom, mass, denseDesc, rhoPrim, h0,&
-        & iRhoPrim, excitedDerivs, ERhoPrim, derivs, chrgForces, energy, potential, TS, E0, Eband,&
-        & eigen, filling, coord0Fold, newCoords, orbitalL, HSqrCplx, SSqrCplx, eigvecsCplx,&
-        & HSqrReal, SSqrReal, eigvecsReal, rhoSqrReal, chargePerShell, occNatural, velocities,&
-        & movedVelo, movedAccel, movedMass, dipoleMoment)
+        & tImHam, tWriteRealHS, tWriteHS, t2Component, tRealHS, tPrintExcitedEigvecs, tDipole,&
+        & tKeepRhoSqr, orb, nAtom, nMovedAtom, nKPoint, nSpin, nExtChrg, indMovedAtom, mass,&
+        & denseDesc, rhoPrim, h0, iRhoPrim, excitedDerivs, ERhoPrim, derivs, chrgForces, energy,&
+        & potential, TS, E0, Eband, eigen, filling, coord0Fold, newCoords, orbitalL, HSqrCplx,&
+        & SSqrCplx, eigvecsCplx, HSqrReal, SSqrReal, eigvecsReal, rhoSqrReal, chargePerShell,&
+        & occNatural, velocities, movedVelo, movedAccel, movedMass, dipoleMoment)
 
     if (tShowFoldedCoord) then
       pCoord0Out => coord0Fold
@@ -2916,11 +2934,11 @@ contains
   !> Allocates most of the large arrays needed during the DFTB run.
   subroutine initArrays(env, tForces, tExtChrg, tLinResp, tLinRespZVect, tMd, tMulliken,&
       & tSpinOrbit, tImHam, tWriteRealHS, tWriteHS, t2Component, tRealHS, tPrintExcitedEigvecs,&
-      & tDipole, orb, nAtom, nMovedAtom, nKPoint, nSpin, nExtChrg, indMovedAtom, mass, denseDesc,&
-      & rhoPrim, h0, iRhoPrim, excitedDerivs, ERhoPrim, derivs, chrgForces, energy, potential, TS,&
-      & E0, Eband, eigen, filling, coord0Fold, newCoords, orbitalL, HSqrCplx, SSqrCplx,&
-      & eigvecsCplx, HSqrReal, SSqrReal, eigvecsReal, rhoSqrReal, chargePerShell, occNatural,&
-      & velocities, movedVelo, movedAccel, movedMass, dipoleMoment)
+      & tDipole, tKeepRhoSqr, orb, nAtom, nMovedAtom, nKPoint, nSpin, nExtChrg, indMovedAtom, mass,&
+      & denseDesc, rhoPrim, h0, iRhoPrim, excitedDerivs, ERhoPrim, derivs, chrgForces, energy,&
+      & potential, TS, E0, Eband, eigen, filling, coord0Fold, newCoords, orbitalL, HSqrCplx,&
+      & SSqrCplx, eigvecsCplx, HSqrReal, SSqrReal, eigvecsReal, rhoSqrReal, chargePerShell,&
+      & occNatural, velocities, movedVelo, movedAccel, movedMass, dipoleMoment)
 
     !> Current environment
     type(TEnvironment), intent(in) :: env
@@ -2966,6 +2984,9 @@ contains
 
     !> Print the dipole moment
     logical, intent(in) :: tDipole
+
+    !> Keep the dense density matrix
+    logical, intent(in) :: tKeepRhoSqr
 
     !> data structure with atomic orbital information
     type(TOrbitals), intent(in) :: orb
@@ -3149,10 +3170,11 @@ contains
       if (withMpi) then
         call error("Linear response calc. does not work with MPI yet")
       end if
-      if (tLinRespZVect) then
-        allocate(rhoSqrReal(sqrHamSize, sqrHamSize, nSpin))
-      end if
     end if
+    if (tKeepRhoSqr) then
+      allocate(rhoSqrReal(sqrHamSize, sqrHamSize, nSpin))
+    end if
+
     allocate(chargePerShell(orb%mShell, nAtom, nSpin))
 
     if (tLinResp .and. tPrintExcitedEigVecs) then

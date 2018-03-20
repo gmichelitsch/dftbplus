@@ -14,14 +14,15 @@
 !>
 module sp2progress
   use assert
-  use dftbp_bml
-  use dftbp_progress
   use constants
   use sparse2bml
   use periodic
   use densedescr
   use message
   use orbitals
+  use commontypes, only : TParallelKS
+  use dftbp_bml
+  use dftbp_progress
   implicit none
   private
 
@@ -61,7 +62,7 @@ module sp2progress
     procedure :: buildZMatrix => TSp2Solver_buildZMatrix
     final :: TSp2Solver_destruct
   end type TSp2Solver
-  
+
 
 contains
 
@@ -75,7 +76,7 @@ contains
     integer, intent(in) :: matrixDim
 
     this%matrixDim = matrixDim
-    
+
     call prg_parse_sp2(this%sp2, "progress.in")
     if (this%sp2%mdim < 0) then
       this%sp2%mdim = this%matrixDim
@@ -116,7 +117,7 @@ contains
     end if
 
   end subroutine TSp2Solver_destruct
-  
+
 
   !> Returns the density by the SP2 technique.
   !>
@@ -124,13 +125,13 @@ contains
   !> method is called.
   !>
   subroutine TSp2Solver_getDensity(this, ham, neighborList, nNeighbor, iSparseStart,&
-      & img2CentCell, denseDesc, orb, nEl, rhoPrim)
+      & img2CentCell, denseDesc, orb, nEl, parallelKS, rhoPrim, rhoSqrReal)
 
     !> Instance
     class(TSp2Solver), intent(inout) :: this
 
     !> Sparse Hamiltonian
-    real(dp), intent(in) ::  ham(:)
+    real(dp), intent(in) ::  ham(:,:)
 
     !> Neighbor list
     type(TNeighborList), intent(in) :: neighborList
@@ -150,65 +151,61 @@ contains
     !> Orbital (basis) information
     type(TOrbitals), intent(in) :: orb
 
-    !> Nr. of electrons assuming filling numbers between 0 and 1.
-    real(dp), intent(in) :: nEl
+    !> Nr. of electrons
+    real(dp), intent(in) :: nEl(:)
+
+    !> Information about local k-points and spins
+    type(TParallelKS), intent(in) :: parallelKS
 
     !> Sparse density matrix on exit.
-    real(dp), intent(out) :: rhoPrim(:)
-    
-    real(dp) ::  bandFilling
-    character(100) :: errorStr
-    
-    type(bml_matrix_t) :: bmlHam, bmlRho, bmlOrthoH,bmlOrthoRho
+    real(dp), intent(out) :: rhoPrim(:,:)
+
+    !> Storage for the dense density matrix, if needed.
+    real(dp), allocatable, intent(inout) :: rhoSqrReal(:,:,:)
+
+    type(bml_matrix_t) :: bmlHam, bmlRho
+    real(dp), allocatable :: buffer(:,:)
+    real(dp) :: bandFilling, normFac
+    integer :: iKS, iSpin, nSpin
 
     @:ASSERT(this%tInit)
     @:ASSERT(this%tInitZ)
 
-    associate (sp2 => this%sp2)
+    nSpin = size(ham, dim=2)
 
-      call bml_zero_matrix(sp2%bml_type, bml_element_real, dp, this%matrixDim, sp2%mdim, bmlHam)
-      call bml_zero_matrix(sp2%bml_type, bml_element_real, dp, this%matrixDim, sp2%mdim, bmlRho)
-      call bml_zero_matrix(sp2%bml_type, bml_element_real, dp, this%matrixDim, sp2%mdim, bmlOrthoH)
-      call bml_zero_matrix(sp2%bml_type, bml_element_real, dp, this%matrixDim, sp2%mdim,&
-          & bmlOrthoRho)
+    ! SP2-solver needs idempotent density matrix with fillings 0 <= f <= 1.
+    if (nSpin == 1) then
+      normFac = 0.5_dp
+    else
+      normFac = 1.0_dp
+    end if
 
-      call foldToRealBml(ham, neighborList%iNeighbor, nNeighbor, orb, denseDesc%iAtomStart,&
+    call bml_zero_matrix(this%sp2%bml_type, bml_element_real, dp, this%matrixDim, this%sp2%mdim,&
+        & bmlHam)
+    call bml_zero_matrix(this%sp2%bml_type, bml_element_real, dp, this%matrixDim, this%sp2%mdim,&
+        & bmlRho)
+
+    do iKS = 1, parallelKS%nLocalKS
+      iSpin = parallelKS%localKS(2, iKS)
+      bandFilling = nEl(iSpin) * normFac / real(this%matrixDim, dp)
+      call foldToRealBml(ham(:,iSpin), neighborList%iNeighbor, nNeighbor, orb, denseDesc%iAtomStart,&
           & iSparseStart, img2CentCell, bmlHam)
-      call prg_orthogonalize(bmlHam, this%zMat, bmlOrthoH, sp2%threshold, sp2%bml_type, sp2%verbose)
-
-      bandFilling = nEl / real(this%matrixDim, dp)
-
-      ! Perform SP2 from progress
-      if (sp2%flavor == "Basic") then
-        call prg_sp2_basic(bmlOrthoH, bmlOrthoRho, sp2%threshold, bandFilling, sp2%minsp2iter,&
-            & sp2%maxsp2iter, sp2%sp2conv, sp2%sp2tol, sp2%verbose)
-      else if (sp2%flavor == "Alg1") then
-        call prg_sp2_alg1(bmlOrthoH, bmlOrthoRho, sp2%threshold, bandFilling, sp2%minsp2iter,&
-            & sp2%maxsp2iter, sp2%sp2conv, sp2%sp2tol, sp2%verbose)
-      else if (sp2%flavor == "Alg2") then
-        call prg_sp2_alg2(bmlOrthoH, bmlOrthoRho, sp2%threshold, bandFilling, sp2%minsp2iter,&
-            & sp2%maxsp2iter, sp2%sp2conv, sp2%sp2tol, sp2%verbose)
-      else
-        write(errorStr, "(3A)") "Invalid SP2 flavor '", sp2%flavor, "'"
-        call error(errorStr)
-      end if
-
-      call prg_deorthogonalize(bmlOrthoRho, this%zMat, bmlRho, sp2%threshold, sp2%bml_type,&
-          & sp2%verbose)
-      rhoPrim(:) = 0.0_dp
+      call getDensityBml(bmlHam, this%zMat, bandFilling, this%sp2, this%matrixDim, bmlRho)
+      rhoPrim(:,iSpin) = 0.0_dp
       call unfoldFromRealBml(bmlRho, neighborList%iNeighbor, nNeighbor, orb, denseDesc%iAtomStart,&
-          & iSparseStart, img2CentCell, rhoPrim)
+          & iSparseStart, img2CentCell, rhoPrim(:,iSpin))
+      if (allocated(rhoSqrReal)) then
+        call bml_export_to_dense(bmlRho, buffer)
+        rhoSqrReal(:,:,iSpin) = buffer
+      end if
+    end do
 
-      call bml_deallocate(bmlHam)
-      call bml_deallocate(bmlRho)
-      call bml_deallocate(bmlOrthoRho)
-      call bml_deallocate(bmlOrthoH)
-      
-    end associate
+    call bml_deallocate(bmlHam)
+    call bml_deallocate(bmlRho)
 
   end subroutine TSp2Solver_getDensity
 
-  
+
   !> Computes the inverse overlap congruence transform.
   !>
   !> Computes the inverse overlap needed to orthogonalize the Hamiltonia before applying the SP2
@@ -247,7 +244,7 @@ contains
     @:ASSERT(this%tInit)
 
     associate (zsp => this%zsp)
-      
+
       this%iGenZ = this%iGenZ + 1
 
       call bml_zero_matrix(zsp%bml_type, bml_element_real, dp, this%matrixDim, zsp%mdim, bmlOver)
@@ -273,8 +270,64 @@ contains
     end associate
 
     this%tInitZ = .true.
-  
+
   end subroutine TSp2Solver_buildZMatrix
+
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!  Private routines
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+  !> Returns the density in BML-format for a Hamiltonian in BML-format
+  subroutine getDensityBml(bmlHam, zMat, bandFilling, sp2, matrixDim, bmlRho)
+
+    !> Hamiltonian
+    type(bml_matrix_t), intent(inout) :: bmlHam
+
+    !> Z-matrix for the congruence transformation of the overlap
+    type(bml_matrix_t), intent(inout) :: zMat
+
+    !> Band filling factor
+    real(dp), intent(in) :: bandFilling
+
+    !> Settings for the SP2-algorithm
+    type(sp2data_type), intent(in) :: sp2
+
+    !> Dimension of the matrices
+    integer, intent(in) :: matrixDim
+
+    !> Density matrix
+    type(bml_matrix_t), intent(out) :: bmlRho
+
+    type(bml_matrix_t) :: bmlOrthoH, bmlOrthoRho
+    character(100) :: errorStr
+
+    call bml_zero_matrix(sp2%bml_type, bml_element_real, dp, matrixDim, sp2%mdim, bmlOrthoH)
+    call bml_zero_matrix(sp2%bml_type, bml_element_real, dp, matrixDim, sp2%mdim, bmlOrthoRho)
+
+    call prg_orthogonalize(bmlHam, zMat, bmlOrthoH, sp2%threshold, sp2%bml_type, sp2%verbose)
+
+    ! Perform SP2 from progress
+    if (sp2%flavor == "Basic") then
+      call prg_sp2_basic(bmlOrthoH, bmlOrthoRho, sp2%threshold, bandFilling, sp2%minsp2iter,&
+          & sp2%maxsp2iter, sp2%sp2conv, sp2%sp2tol, sp2%verbose)
+    else if (sp2%flavor == "Alg1") then
+      call prg_sp2_alg1(bmlOrthoH, bmlOrthoRho, sp2%threshold, bandFilling, sp2%minsp2iter,&
+          & sp2%maxsp2iter, sp2%sp2conv, sp2%sp2tol, sp2%verbose)
+    else if (sp2%flavor == "Alg2") then
+      call prg_sp2_alg2(bmlOrthoH, bmlOrthoRho, sp2%threshold, bandFilling, sp2%minsp2iter,&
+          & sp2%maxsp2iter, sp2%sp2conv, sp2%sp2tol, sp2%verbose)
+    else
+      write(errorStr, "(3A)") "Invalid SP2 flavor '", sp2%flavor, "'"
+      call error(errorStr)
+    end if
+
+    call prg_deorthogonalize(bmlOrthoRho, zMat, bmlRho, sp2%threshold, sp2%bml_type, sp2%verbose)
+
+    call bml_deallocate(bmlOrthoH)
+    call bml_deallocate(bmlOrthoRho)
+
+  end subroutine getDensityBml
 
 
 end module sp2progress

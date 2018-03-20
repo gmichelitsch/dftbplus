@@ -19,6 +19,6 @@ module dftbp_bml
   public :: bml_get_N, bml_get_M, bml_get_type
   public :: bml_set_row, bml_get_row
   public :: bml_transpose_triangle, bml_adjungate_triangle
-  public :: bml_print_matrix
+  public :: bml_export_to_dense, bml_print_matrix
 
 end module dftbp_bml

@@ -31,6 +31,10 @@ Options {
   WriteAutotestTag = Yes
 }
 
+Analysis {
+  CalculateForces = Yes
+}
+
 ParserOptions {
   ParserVersion = 5
 }
