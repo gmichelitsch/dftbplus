@@ -232,7 +232,7 @@ contains
       ! The following will build the inverse overlap congruence transformation for SP2
       if (tCoordsChanged .and. solver%solverType == solverTypes%progressSp2) then
         call solver%sp2Solver%buildZMatrix(over, neighborList, nNeighbor, iSparseStart,&
-            & img2CentCell, parallelKS, denseDesc, orb)
+            & img2CentCell, denseDesc, orb)
       end if
     #:endif
 
@@ -1921,7 +1921,7 @@ contains
       nElNormed = nEl(iSpin) * normFac
     #:if WITH_PROGRESS
       call solver%sp2Solver%getDensity(ham(:,iSpin), neighborList, nNeighbor, iSparseStart,&
-          & img2CentCell, parallelKS, denseDesc, orb, nElNormed, rhoPrim(:,iSpin))
+          & img2CentCell, denseDesc, orb, nElNormed, rhoPrim(:,iSpin))
     #:else
       call error("Internal error: getDensityBySp2 called despite missing Progress support")
     #:endif

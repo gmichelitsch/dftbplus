@@ -80,6 +80,9 @@ module initprogram
   use taggedoutput
   use formatout
   use dftbp_solvers
+#:if WITH_PROGRESS
+  use sp2progress, only : TSp2Solver_init
+#:endif  
   implicit none
 
   !> Tagged output files (machine readable)
@@ -1005,6 +1008,7 @@ contains
     if (solver%solverType == solverTypes%progressSp2) then
     #:if WITH_PROGRESS
       allocate(solver%sp2Solver)
+      call TSp2Solver_init(solver%sp2Solver, nOrb)
     #:else
       call error("Can not use the SP2 solver as code was compiled without the Progress library")
     #:endif
