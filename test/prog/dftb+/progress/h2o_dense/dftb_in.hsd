@@ -10,7 +10,7 @@ Hamiltonian = DFTB {
     0.0  0.0  0.0   1.0
   }
   Scc = Yes
-  SccTolerance = 1.0e-5
+  SccTolerance = 1.0e-10
 
   SlaterKosterFiles {
     H-H =  "./H-H.skf"
