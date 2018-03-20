@@ -39,6 +39,7 @@ module dftbp_mmapi
   type :: TDftbPlus
     private
     type(TEnvironment) :: env
+    logical :: tCalcOnlyHS = .false.
   contains
     procedure, nopass :: getInputFromFile => TDftbPlus_getInputFromFile
     procedure, nopass :: getEmptyInput => TDftbPlus_getEmptyInput
@@ -50,8 +51,12 @@ module dftbp_mmapi
     procedure :: getGradients => TDftbPlus_getGradients
     procedure :: getExtChargeGradients => TDftbPlus_getExtChargeGradients
     procedure :: getGrossCharges => TDftbPlus_getGrossCharges
+    procedure :: setRealDensity => TDftbPlus_setRealDensity
+    procedure :: getRealHamiltonian => TDftbPlus_getRealHamiltonian
+    procedure :: getRealOverlap => TDftbPlus_getRealOverlap
+    procedure :: getNonInteractingDensMat => TDftbPlus_getNonInteractingDensMat
+    procedure :: denseMatrixShape => TDftbPlus_denseMatrixShape
   end type TDftbPlus
-
 
 
 contains
@@ -66,7 +71,7 @@ contains
     type(fnode), pointer, intent(out) :: root
 
     if (.not. associated(this%hsdTree)) then
-      print *, 'ERROR: input has not been created yet!'
+      print "(A)", 'ERROR: input has not been created yet!'
       stop
     end if
     call getChild(this%hsdTree, rootTag, root)
@@ -80,7 +85,7 @@ contains
   !> initialised within one process. Therefore, this routine can not be called twice, unless the
   !> TDftbPlus_destruct() has been called in between. Otherwise the subroutine will stop.
   !>
-  subroutine TDftbPlus_init(this, outputUnit, mpiComm)
+  subroutine TDftbPlus_init(this, outputUnit, mpiComm, calcOnlyHS)
 
     !> Instance.
     type(TDftbPlus), intent(out) :: this
@@ -90,6 +95,9 @@ contains
 
     !> MPI-communicator to use (placholder only, the API does not work with MPI yet)
     integer, intent(in), optional :: mpiComm
+
+    !> Whether only H/S should be calculated (no diagonalization made)
+    logical, intent(in), optional :: calcOnlyHS
 
     integer :: stdOut
 
@@ -104,6 +112,10 @@ contains
       stop
     end if
     nDftbPlusCalc = 1
+
+    if (present(calcOnlyHS)) then
+      this%tCalcOnlyHS = calcOnlyHS
+    end if
 
     call initGlobalEnv(outputUnit=outputUnit, mpiComm=mpiComm)
     call TEnvironment_init(this%env)
@@ -166,7 +178,7 @@ contains
     type(inputData) :: inpData
 
     call parseHsdTree(input%hsdTree, inpData, parserFlags)
-    call initProgramVariables(inpData, this%env)
+    call initProgramVariables(inpData, this%env, calcOnlyHS=this%tCalcOnlyHS)
 
   end subroutine TDftbPlus_setupCalculator
 
@@ -281,6 +293,51 @@ contains
 
   end subroutine TDftbPlus_getGrossCharges
 
+
+  subroutine TDftbPlus_setRealDensity(this, densityMatrix)
+    class(TDftbPlus), intent(inout) :: this
+    real(dp), intent(out) :: densityMatrix(:,:,:)
+
+    call setRealDensity(this%env, densityMatrix)
+
+  end subroutine TDftbPlus_setRealDensity
+
+
+  subroutine TDftbPlus_getRealHamiltonian(this, hamiltonian)
+    class(TDftbPlus), intent(inout) :: this
+    real(dp), intent(out) :: hamiltonian(:,:,:)
+
+    call getRealHamiltonian(this%env, hamiltonian)
+
+  end subroutine TDftbPlus_getRealHamiltonian
+
+
+  subroutine TDftbPlus_getRealOverlap(this, overlap)
+    class(TDftbPlus), intent(inout) :: this
+    real(dp), intent(out) :: overlap(:,:)
+
+    call getRealOverlap(this%env, overlap)
+
+  end subroutine TDftbPlus_getRealOverlap
+
+
+  subroutine TDftbPlus_getNonInteractingDensMat(this, densityMatrix)
+    class(TDftbPlus), intent(inout) :: this
+    real(dp), intent(out) :: densityMatrix(:,:,:)
+
+    call getNonInteractingDensMat(densityMatrix)
+
+  end subroutine TDftbPlus_getNonInteractingDensMat
+
+
+  function TDftbPlus_denseMatrixShape(this) result(matDim)
+    class(TDftbPlus), intent(inout) :: this
+    integer :: matDim(3)
+
+    matDim(:) = denseMatrixShape()
+
+  end function TDftbPlus_denseMatrixShape
+    
 
   !> Reads out the angular momentum from the an SK-file.
   !>

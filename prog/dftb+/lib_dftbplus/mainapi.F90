@@ -11,16 +11,24 @@ module dftbp_mainapi
   use dftbp_environment, only : TEnvironment
   use dftbp_assert
   use dftbp_accuracy, only : dp
-  use dftbp_main, only : processGeometry
+  use dftbp_main, only : processGeometry, getMullikenPopulation
   use dftbp_initprogram, only : initProgramVariables, destructProgramVariables, coord0, latVec,&
       & tCoordsChanged, tLatticeChanged, energy, derivs, TRefExtPot, refExtPot, tExtField, orb,&
-      & nAtom, nSpin, q0, qOutput, sccCalc, tExtChrg, tForces, chrgForces
+      & nAtom, nSpin, q0, qOutput, qBlockOut, qiBlockOut, qInput, qBlockIn, qiBlockIn, sccCalc,&
+      & tExtChrg, tForces, chrgForces, ham, over, rhoPrim, iRhoPrim, neighborList, nNeighbor,&
+      & denseDesc, iSparseStart, img2CentCell
+  use dftbp_spin, only : qm2ud, ud2qm
+  use dftbp_sparse2dense, only : packHS, unpackHS, blockSymmetrizeHS
   implicit none
   private
 
   public :: initProgramVariables, destructProgramVariables
   public :: setGeometry, setExternalPotential, setExternalCharges
   public :: getEnergy, getGradients, getExtChargeGradients, getGrossCharges
+  public :: setRealDensity, getRealHamiltonian, getRealOverlap, getNonInteractingDensMat
+  public :: denseMatrixShape
+
+  logical :: tChargesChanged = .true.
 
 contains
 
@@ -130,7 +138,7 @@ contains
         allocate(chrgForces(3, size(chargeQs)))
       end if
     end if
-    call sccCalc%setExternalCharges(chargeCoords, chargeQs)
+    call sccCalc%setExternalCharges(chargeCoords, chargeQs, blurWidths=blurWidths)
     
   end subroutine setExternalCharges
 
@@ -146,6 +154,83 @@ contains
     chargeGradients(:,:) = chrgForces
     
   end subroutine getExtChargeGradients
+
+
+  subroutine setRealDensity(env, densityMatrix)
+    type(TEnvironment), intent(inout) :: env
+    real(dp), intent(in) :: densityMatrix(:,:,:)
+
+    integer :: iSpin
+
+    call recalcGeometry(env)
+    rhoPrim(:, :) = 0.0_dp
+    do iSpin = 1, size(densityMatrix, dim=3)
+      call packHS(rhoPrim(:,iSpin), densityMatrix(:,:,iSpin), neighborlist%iNeighbor, nNeighbor,&
+          & orb%mOrb, denseDesc%iAtomStart, iSparseStart, img2CentCell)
+    end do
+    call ud2qm(rhoPRim)
+    tChargesChanged = .true.
+    call recalcCharges(env)
+    
+  end subroutine setRealDensity
+
+
+  subroutine getRealHamiltonian(env, hamiltonian)
+    type(TEnvironment), intent(inout) :: env
+    real(dp), intent(out) :: hamiltonian(:,:,:)
+
+    integer :: iSpin
+
+    call recalcGeometry(env)
+    do iSpin = 1, size(hamiltonian, dim=3)
+      call unpackHS(hamiltonian(:,:,iSpin), ham(:,iSpin), neighborList%iNeighbor, nNeighbor,&
+          & denseDesc%iAtomStart, iSparseStart, img2CentCell)
+      call blockSymmetrizeHS(hamiltonian(:,:,iSpin), denseDesc%iAtomStart)
+    end do
+    call qm2ud(hamiltonian)
+
+  end subroutine getRealHamiltonian
+
+
+  subroutine getRealOverlap(env, overlap)
+    type(TEnvironment), intent(inout) :: env
+    real(dp), intent(out) :: overlap(:,:)
+
+    call recalcGeometry(env)
+    call unpackHS(overlap, over, neighborList%iNeighbor, nNeighbor, denseDesc%iAtomStart,&
+        & iSparseStart, img2CentCell)
+    call blockSymmetrizeHS(overlap, denseDesc%iAtomStart)
+
+  end subroutine getRealOverlap
+
+
+  subroutine getNonInteractingDensMat(densityMatrix)
+    real(dp), intent(out) :: densityMatrix(:,:,:)
+
+    integer :: iAt, iOrb, iSpin
+    integer :: ind
+
+    densityMatrix(:,:,:) = 0.0_dp
+    ind = 1
+    do iSpin = 1, size(densityMatrix, dim=3)
+      do iAt = 1, nAtom
+        do iOrb = 1, orb%nOrbAtom(iAt)
+          densityMatrix(ind, ind, iSpin) = qInput(iOrb, iAt, iSpin)
+          ind = ind + 1
+        end do
+      end do
+    end do
+    call qm2ud(densityMatrix)
+    
+  end subroutine getNonInteractingDensMat
+
+
+  function denseMatrixShape() result(matDim)
+    integer :: matDim(3)
+
+    matDim(:) = [orb%nOrb, orb%nOrb, nSpin]
+
+  end function denseMatrixShape
 
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -164,6 +249,30 @@ contains
     end if
 
   end subroutine recalcGeometry
+
+
+  subroutine recalcCharges(env)
+    type(TEnvironment), intent(inout) :: env
+
+    logical :: tStopDriver, tStopScc
+    
+    if (.not. tChargesChanged) then
+      return
+    end if
+
+    call getMullikenPopulation(rhoPrim, over, orb, neighborList, nNeighbor, img2CentCell,&
+        & iSparseStart, qInput, iRhoPrim=iRhoPrim, qBlock=qBlockIn, qiBlock=qiBlockIn)
+    qOutput(:,:,:) = qInput
+    if (allocated(qBlockIn)) then
+      qBlockOut(:,:,:,:) = qBlockIn
+    end if
+    if (allocated(qiBlockIn)) then
+      qiBlockOut(:,:,:,:) = qiBlockIn
+    end if
+    tChargesChanged = .false.
+    call processGeometry(env, 1, 1, .false., tStopDriver, tStopScc)
+    
+  end subroutine recalcCharges
 
   
 end module dftbp_mainapi

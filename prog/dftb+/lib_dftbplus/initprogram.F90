@@ -649,6 +649,9 @@ module dftbp_initprogram
   !> Should HS (sparse) be printed?
   logical :: tWriteRealHS
 
+  !> Whether DFTB+ core should only calculate Hamiltonian and overlap
+  logical :: tCalcOnlyHS = .false.
+
   !> Program run id
   integer :: runId
 
@@ -839,13 +842,16 @@ contains
 
 
   !> Initializes the variables in the module based on the parsed input
-  subroutine initProgramVariables(input, env)
+  subroutine initProgramVariables(input, env, calcOnlyHS)
 
     !> Holds the parsed input data.
     type(inputData), intent(inout), target :: input
 
     !> Environment settings
     type(TEnvironment), intent(inout) :: env
+
+    !> Whether DFTB+ should only be used as Hamiltonian builder
+    logical, intent(in), optional :: calcOnlyHS
 
     ! Mixer related local variables
     integer :: nGeneration
@@ -959,6 +965,10 @@ contains
 
     write(stdOut, "(/, A)") "Starting initialization..."
     write(stdOut, "(A80)") repeat("-", 80)
+
+    if (present(calcOnlyHS)) then
+      tCalcOnlyHS = calcOnlyHs
+    end if
 
     call env%initGlobalTimer(input%ctrl%timingLevel, "DFTB+ running times", stdOut)
     call env%globalTimer%startTimer(globalTimers%globalInit)

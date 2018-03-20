@@ -80,7 +80,7 @@ module dftbp_main
   private
 
   public :: runDftbPlus
-  public :: processGeometry
+  public :: processGeometry, getMullikenPopulation
 
   !> O(N^2) density matrix creation
   logical, parameter :: tDensON2 = .false.
@@ -304,7 +304,7 @@ contains
           & rhoPrim, iRhoPrim, iHam, ERhoPrim, iSparseStart)
     end if
 
-    if (tSccCalc) then
+    if (tSccCalc .and. .not. tCalcOnlyHS) then
       call reset(pChrgMixer, nMixElements)
     end if
 
@@ -319,10 +319,12 @@ contains
       call getTemperature(temperatureProfile, tempElec)
     end if
 
-    call calcRepulsiveEnergy(coord, species, img2CentCell, nNeighbor, neighborList, pRepCont,&
-        & energy%atomRep, energy%ERep)
+    if (.not. tCalcOnlyHS) then
+      call calcRepulsiveEnergy(coord, species, img2CentCell, nNeighbor, neighborList, pRepCont,&
+          & energy%atomRep, energy%ERep)
+    end if
 
-    if (tDispersion) then
+    if (tDispersion .and. .not. tCalcOnlyHS) then
       call calcDispersionEnergy(dispersion, energy%atomDisp, energy%Edisp)
     end if
 
@@ -352,6 +354,10 @@ contains
 
       call getSccHamiltonian(H0, over, nNeighbor, neighborList, species, orb, iSparseStart,&
           & img2CentCell, potential, ham, iHam)
+
+      if (tCalcOnlyHS) then
+        return
+      end if
 
       if (tWriteRealHS .or. tWriteHS) then
         if (withMpi) then
@@ -1683,6 +1689,7 @@ contains
             & iSparseStart, img2CentCell, iCellVec, cellVec, solver, parallelKS, HSqrCplx,&
             & SSqrCplx, eigVecsCplx, eigen)
       end if
+      call ud2qm(ham)
     else
       call buildAndDiagDensePauliHam(env, denseDesc, ham, over, kPoint, neighborList, nNeighbor,&
           & iSparseStart, img2CentCell, iCellVec, cellVec, orb, solver, parallelKS, eigen(:,:,1),&
@@ -2068,6 +2075,7 @@ contains
       else
         call makeDensityMatrix(work, eigvecs(:,:,iKS), filling(:,iSpin))
       end if
+
       call env%globalTimer%startTimer(globalTimers%denseToSparse)
       call packHS(rhoPrim(:,iSpin), work, neighborlist%iNeighbor, nNeighbor, orb%mOrb,&
           & denseDesc%iAtomStart, iSparseStart, img2CentCell)
@@ -3987,7 +3995,6 @@ contains
     real(dp), allocatable :: tmpDerivs(:,:)
     logical :: tImHam, tExtChrg, tSccCalc
     integer :: nAtom, iAt
-    integer :: ii
 
     tSccCalc = allocated(sccCalc)
     tImHam = allocated(iRhoPrim)
