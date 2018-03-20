@@ -86,6 +86,10 @@ contains
       this%zsp%mdim = this%matrixDim
     end if
 
+    if (this%sp2%bml_type /= this%zsp%bml_type) then
+      call error("SP2 and ZSP bml types differ")
+    end if
+
     call bml_zero_matrix(this%zsp%bml_type, bml_element_real, dp, this%matrixDim, this%zsp%mdim,&
         & this%zMat)
 
@@ -161,15 +165,6 @@ contains
     @:ASSERT(this%tInitZ)
 
     associate (sp2 => this%sp2)
-
-      if (bml_get_type(this%zMat) /= sp2%bml_type) then
-        call error("SP2 and ZSP bml types differ")
-      end if
-      if (bml_get_M(this%zMat) /= sp2%mdim) then
-        call error("SP2 and ZSP M dimension for sparse matrices are different")
-        write(errorStr, "(A,I0,A,I0,A)") "SP2 and ZSP M dimension are different (", sp2%mdim,&
-            & " versus ", bml_get_M(this%zMat), ")"
-      end if
 
       call bml_zero_matrix(sp2%bml_type, bml_element_real, dp, this%matrixDim, sp2%mdim, bmlHam)
       call bml_zero_matrix(sp2%bml_type, bml_element_real, dp, this%matrixDim, sp2%mdim, bmlRho)
