@@ -36,6 +36,7 @@ module parser
   use commontypes
   use oldskdata
   use xmlf90
+  use dftbp_solvers, only : solverTypes
 #:if WITH_SOCKETS
   use ipisocket, only : IPI_PROTOCOLS
 #:endif
@@ -1605,11 +1606,15 @@ contains
     call getNodeName(value, buffer)
     select case(char(buffer))
     case ("qr")
-      ctrl%iSolver = 1
+      ctrl%iSolver = solverTypes%lapackQr
     case ("divideandconquer")
-      ctrl%iSolver = 2
+      ctrl%iSolver = solverTypes%lapackDivAndConq
     case ("relativelyrobust")
-      ctrl%iSolver = 3
+      ctrl%iSolver = solverTypes%lapackRelRobust
+    case ("sp2")
+      ctrl%iSolver = solverTypes%progressSp2
+    case default
+      call detailedError(value, "Invalid eigensolver type")
     end select
 
     ! Filling (temperature only read, if AdaptFillingTemp was not set for the selected MD

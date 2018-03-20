@@ -4,25 +4,27 @@ Geometry = GenFormat {
 
 Hamiltonian = DFTB {
 
-  ForceEvaluation = dynamicst0
+  ForceEvaluation = 'dynamicst0'
 
-  KPointsAndWeights = { 0 0 0  1.0}
+  KPointsAndWeights {
+    0.0  0.0  0.0   1.0
+  }
+  Scc = Yes
+  SccTolerance = 1.0e-5
 
-  SCC = Yes
-  SCCTolerance = 1.0e-5
-
-  SlaterKosterFiles = {
+  SlaterKosterFiles {
     H-H =  "./H-H.skf"
     H-O =  "./H-O.skf"
     O-H =  "./O-H.skf"
     O-O =  "./O-O.skf"
   }
 
-  MaxAngularMomentum = {
+  Eigensolver = Sp2 {}
+
+  MaxAngularMomentum {
     H = "s"
     O = "p"
   }
-
 }
 
 Options {

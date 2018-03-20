@@ -220,8 +220,8 @@ slakoeqgrid.o = slakoeqgrid.o $(_mod_accuracy) $(_mod_message) $(common.fypp) $(
 _mod_slakoeqgrid: slakoeqgrid.o
 _mod_slakoeqgrid = $(slakoeqgrid.o)
 
-sparse2bml.o: _mod_bmlprogress _mod_commontypes common.fypp _mod_accuracy _mod_constants
-sparse2bml.o = sparse2bml.o $(_mod_bmlprogress) $(_mod_commontypes) $(common.fypp) $(_mod_accuracy) $(_mod_constants)
+sparse2bml.o: _mod_dftbp_bml _mod_commontypes common.fypp _mod_accuracy _mod_constants
+sparse2bml.o = sparse2bml.o $(_mod_dftbp_bml) $(_mod_commontypes) $(common.fypp) $(_mod_accuracy) $(_mod_constants)
 _mod_sparse2bml: sparse2bml.o
 _mod_sparse2bml = $(sparse2bml.o)
 

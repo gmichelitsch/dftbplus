@@ -13,7 +13,7 @@ module sparse2bml
   use accuracy
   use commontypes
   use constants
-  use bmlprogress
+  use dftbp_bml
   implicit none
   private
 
@@ -190,7 +190,7 @@ contains
     real(dp), intent(inout) :: sparse(:)
 
     integer :: iAt1, iAt2f, iNeigh, iOrb, iOrig
-    integer :: nAtom, nOrb1, nOrb2, globCol, globRow, indSparse
+    integer :: nAtom, nOrb1, nOrb2, globCol, globRow
     real(dp), allocatable :: buffer(:,:), rowBuffer(:)
 
     nAtom = size(iNeighbor, dim=2)
@@ -264,7 +264,7 @@ contains
     complex(C_DOUBLE_COMPLEX), allocatable :: buffer(:,:), rowBuffer(:)
     integer :: nAtom
     integer :: iAt1, iAt2, iAt2f, iNeigh, iOrb, iVec, iOldVec, iOrig
-    integer :: nOrb1, nOrb2, globCol, globRow, indSparse
+    integer :: nOrb1, nOrb2, globCol, globRow
 
     nAtom = size(iNeighbor, dim=2)
 

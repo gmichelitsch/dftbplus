@@ -7,14 +7,19 @@
 
 #:include 'common.fypp'
 
-!> Provides interface to the BML and Progress libraries.
-module bmlprogress
-  use bml
+!> Provides interface to the Progress library
+module dftbp_progress
+  use prg_sp2_mod
+  use prg_sp2parser_mod
+  use prg_genz_mod
+  use prg_nonortho_mod
   implicit none
   private
 
-  public :: bml_matrix_t
-  public :: bml_set_row, bml_get_row
-  public :: bml_transpose_triangle, bml_adjungate_triangle
+  public :: genZSPinp, sp2data_type
+  public :: prg_parse_zsp, prg_parse_sp2
+  public :: prg_buildzdiag, prg_buildzsparse
+  public :: prg_orthogonalize, prg_deorthogonalize
+  public :: prg_sp2_basic, prg_sp2_alg1, prg_sp2_alg2
 
-end module bmlprogress
+end module dftbp_progress

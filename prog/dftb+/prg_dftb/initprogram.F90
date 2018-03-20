@@ -79,6 +79,7 @@ module initprogram
   use potentials
   use taggedoutput
   use formatout
+  use dftbp_solvers
   implicit none
 
   !> Tagged output files (machine readable)
@@ -346,9 +347,8 @@ module initprogram
   !> MD stepsize
   real(dp) :: deltaT
 
-
   !> eigensolver
-  integer :: solver
+  type(TSolver) :: solver
 
   !> maximal number of SCC iterations
   integer :: maxSccIter
@@ -995,11 +995,19 @@ contains
           & boundary conditions!")
     end if
     tFracCoord = input%geom%tFracCoord
-    solver = input%ctrl%iSolver
     if (tSccCalc) then
       maxSccIter = input%ctrl%maxIter
     else
       maxSccIter = 1
+    end if
+
+    solver%solverType = input%ctrl%iSolver
+    if (solver%solverType == solverTypes%progressSp2) then
+    #:if WITH_PROGRESS
+      allocate(solver%sp2Solver)
+    #:else
+      call error("Can not use the SP2 solver as code was compiled without the Progress library")
+    #:endif
     end if
 
     if (tPeriodic) then
@@ -2357,19 +2365,19 @@ contains
       write(stdOut, "(A,':',T30,A)") "Periodic boundaries", "No"
     end if
 
-    select case (solver)
-    case(1)
-      write (strTmp, "(A)") "Standard"
-    case(2)
-      write (strTmp, "(A)") "Divide and Conquer"
-    case(3)
-      write (strTmp, "(A)") "Relatively robust (version 1)"
-    case(4)
-      write (strTmp, "(A)") "Relativel robust (version 2)"
+    select case (solver%solverType)
+    case (solverTypes%lapackQr)
+      write(strTmp, "(A)") "QR"
+    case (solverTypes%lapackDivAndConq)
+      write(strTmp, "(A)") "Divide and Conquer"
+    case (solverTypes%lapackRelRobust)
+      write(strTmp, "(A)") "Relatively robust"
+    case (solverTypes%progressSp2)
+      write(strTmp, "(A)") "SP2"
     case default
-      call error("Unknown eigensolver!")
+      call error("Internal error: Unknown eigensolver in initProgramVariables!")
     end select
-    write(stdOut, "(A,':',T30,A)") "Diagonalizer", trim(strTmp)
+    write(stdOut, "(A,':',T30,A)") "Solver", trim(strTmp)
 
     if (tSccCalc) then
       select case (iMixer)
@@ -3317,7 +3325,6 @@ contains
     end if
 
   end subroutine getDenseDescCommon
-
 
 
 end module initprogram
