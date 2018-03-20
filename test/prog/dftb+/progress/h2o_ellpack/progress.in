@@ -4,7 +4,8 @@ SP2{
   MinSP2Iter=  10
   MaxSP2Iter=  100
   Verbose=     3
-  NumThresh=   1.0d-5     
+  NumThresh=   1.0d-15
+  SP2Tol=      1.0d-20    
   BMLType=     Ellpack
   SP2Conv=     REL                                                                                                 
   Flavor=      Alg1                                                                                                
@@ -13,11 +14,11 @@ SP2{
 ZSP{                                              
   Verbose=     0
   NFirst=      5
-  NRefI=       3
-  NRefF=       1
-  NumthreshI=  1.0d-8
-  NumthreshF=  1.0d-5
-  BMLType=     Ellpack                                                                                      
+  NRefI=       5
+  NRefF=       3
+  NumthreshI=  1.0d-15
+  NumthreshF=  1.0d-15
+  BMLType=     Ellpack                                                                                  
   ZSP=         T
   Int=         T
 }   

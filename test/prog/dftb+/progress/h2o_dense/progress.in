@@ -1,10 +1,9 @@
 SP2{                                              
-  MDim=       -1
-  VarInt=      0
   MinSP2Iter=  10
   MaxSP2Iter=  100
   Verbose=     3
-  NumThresh=   1.0d-5     
+  NumThresh=   1.0d-15
+  SP2Tol=      1.0d-20    
   BMLType=     Dense
   SP2Conv=     REL                                                                                                 
   Flavor=      Alg1                                                                                                
@@ -12,12 +11,12 @@ SP2{
 
 ZSP{                                              
   Verbose=     0
-  NFirst=      10
-  NRefI=       3
-  NRefF=       1
-  NumthreshI=  1.0d-8
-  NumthreshF=  1.0d-5
-  BMLType=     Dense                                                                                  
-  ZSP=         F
+  NFirst=      5
+  NRefI=       5
+  NRefF=       3
+  NumthreshI=  1.0d-15
+  NumthreshF=  1.0d-15
+  BMLType=     Dense                                                                            
+  ZSP=         T
   Int=         T
 }   
