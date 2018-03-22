@@ -46,6 +46,9 @@ module sp2progress
     !> Z-matrix (congruence matrix)
     type(bml_matrix_t) :: zMat
 
+    !> Density matrix caching in order to be reused in force calculation
+    type(bml_matrix_t), allocatable :: bmlRhos(:)
+
     !> Settings for Z-matrix creation
     type(genZSPinp) :: zsp
 
@@ -58,8 +61,9 @@ module sp2progress
     !> Whether the Z-matrix has been initialized already.
     logical :: tInitZ = .false.
   contains
-    procedure :: getDensity => TSp2Solver_getDensity
     procedure :: buildZMatrix => TSp2Solver_buildZMatrix
+    procedure :: getDensity => TSp2Solver_getDensity
+    procedure :: getPulayComponent => TSp2Solver_getPulayComponent
     final :: TSp2Solver_destruct
   end type TSp2Solver
 
@@ -67,13 +71,16 @@ module sp2progress
 contains
 
   !> Initializes an SP2 solver instance.
-  subroutine TSp2Solver_init(this, matrixDim)
+  subroutine TSp2Solver_init(this, matrixDim, nLocalKS)
 
     !> Instance
     type(TSp2Solver), intent(out) :: this
 
     !> Matrix dimension (typically nr. of orbitals in the system)
     integer, intent(in) :: matrixDim
+
+    !> Number of local K and S channels
+    integer, intent(in) :: nLocalKS
 
     this%matrixDim = matrixDim
 
@@ -94,6 +101,8 @@ contains
     call bml_zero_matrix(this%zsp%bml_type, bml_element_real, dp, this%matrixDim, this%zsp%mdim,&
         & this%zMat)
 
+    allocate(this%bmlRhos(nLocalKS))
+
     this%tInit = .true.
 
   end subroutine TSp2Solver_init
@@ -109,6 +118,9 @@ contains
 
     if (this%tInit) then
       call bml_deallocate(this%zMat)
+      do ii = 1, size(this%bmlRhos)
+        call bml_deallocate(this%bmlRhos(ii))
+      end do
       if (this%tInitZ) then
         do ii = 1, size(this%zk)
           call bml_deallocate(this%zk(ii))
@@ -117,93 +129,6 @@ contains
     end if
 
   end subroutine TSp2Solver_destruct
-
-
-  !> Returns the density by the SP2 technique.
-  !>
-  !> Note: The method buildZMatrix() must be called for the given overlap matrix before this
-  !> method is called.
-  !>
-  subroutine TSp2Solver_getDensity(this, ham, neighborList, nNeighbor, iSparseStart,&
-      & img2CentCell, denseDesc, orb, nEl, parallelKS, rhoPrim, rhoSqrReal)
-
-    !> Instance
-    class(TSp2Solver), intent(inout) :: this
-
-    !> Sparse Hamiltonian
-    real(dp), intent(in) ::  ham(:,:)
-
-    !> Neighbor list
-    type(TNeighborList), intent(in) :: neighborList
-
-    !> Nr. of neighbors for each atom.
-    integer, intent(in) :: nNeighbor(:)
-
-    !> Sparse matrix descriptor
-    integer, intent(in) :: iSparseStart(:,:)
-
-    !> Images of the atoms in the central cell
-    integer, intent(in) :: img2CentCell(:)
-
-    !> Dense matrix descriptor
-    type(TDenseDescr), intent(in) :: denseDesc
-
-    !> Orbital (basis) information
-    type(TOrbitals), intent(in) :: orb
-
-    !> Nr. of electrons
-    real(dp), intent(in) :: nEl(:)
-
-    !> Information about local k-points and spins
-    type(TParallelKS), intent(in) :: parallelKS
-
-    !> Sparse density matrix on exit.
-    real(dp), intent(out) :: rhoPrim(:,:)
-
-    !> Storage for the dense density matrix, if needed.
-    real(dp), allocatable, intent(inout) :: rhoSqrReal(:,:,:)
-
-    type(bml_matrix_t) :: bmlHam, bmlRho
-    real(dp), allocatable :: buffer(:,:)
-    real(dp) :: bandFilling, normFac
-    integer :: iKS, iSpin, nSpin
-
-    @:ASSERT(this%tInit)
-    @:ASSERT(this%tInitZ)
-
-    nSpin = size(ham, dim=2)
-
-    ! SP2-solver needs idempotent density matrix with fillings 0 <= f <= 1.
-    if (nSpin == 1) then
-      normFac = 0.5_dp
-    else
-      normFac = 1.0_dp
-    end if
-
-    call bml_zero_matrix(this%sp2%bml_type, bml_element_real, dp, this%matrixDim, this%sp2%mdim,&
-        & bmlHam)
-    call bml_zero_matrix(this%sp2%bml_type, bml_element_real, dp, this%matrixDim, this%sp2%mdim,&
-        & bmlRho)
-
-    do iKS = 1, parallelKS%nLocalKS
-      iSpin = parallelKS%localKS(2, iKS)
-      bandFilling = nEl(iSpin) * normFac / real(this%matrixDim, dp)
-      call foldToRealBml(ham(:,iSpin), neighborList%iNeighbor, nNeighbor, orb, denseDesc%iAtomStart,&
-          & iSparseStart, img2CentCell, bmlHam)
-      call getDensityBml(bmlHam, this%zMat, bandFilling, this%sp2, this%matrixDim, bmlRho)
-      rhoPrim(:,iSpin) = 0.0_dp
-      call unfoldFromRealBml(bmlRho, neighborList%iNeighbor, nNeighbor, orb, denseDesc%iAtomStart,&
-          & iSparseStart, img2CentCell, rhoPrim(:,iSpin))
-      if (allocated(rhoSqrReal)) then
-        call bml_export_to_dense(bmlRho, buffer)
-        rhoSqrReal(:,:,iSpin) = buffer
-      end if
-    end do
-
-    call bml_deallocate(bmlHam)
-    call bml_deallocate(bmlRho)
-
-  end subroutine TSp2Solver_getDensity
 
 
   !> Computes the inverse overlap congruence transform.
@@ -272,6 +197,150 @@ contains
     this%tInitZ = .true.
 
   end subroutine TSp2Solver_buildZMatrix
+
+
+  !> Returns the density by the SP2 technique.
+  !>
+  !> Note: The method buildZMatrix() must be called for the given overlap matrix before this
+  !> method is called.
+  !>
+  subroutine TSp2Solver_getDensity(this, ham, neighborList, nNeighbor, iSparseStart,&
+      & img2CentCell, denseDesc, orb, nEl, parallelKS, rhoPrim, rhoSqrReal)
+
+    !> Instance
+    class(TSp2Solver), intent(inout) :: this
+
+    !> Sparse Hamiltonian
+    real(dp), intent(in) ::  ham(:,:)
+
+    !> Neighbor list
+    type(TNeighborList), intent(in) :: neighborList
+
+    !> Nr. of neighbors for each atom.
+    integer, intent(in) :: nNeighbor(:)
+
+    !> Sparse matrix descriptor
+    integer, intent(in) :: iSparseStart(:,:)
+
+    !> Images of the atoms in the central cell
+    integer, intent(in) :: img2CentCell(:)
+
+    !> Dense matrix descriptor
+    type(TDenseDescr), intent(in) :: denseDesc
+
+    !> Orbital (basis) information
+    type(TOrbitals), intent(in) :: orb
+
+    !> Nr. of electrons
+    real(dp), intent(in) :: nEl(:)
+
+    !> Information about local k-points and spins
+    type(TParallelKS), intent(in) :: parallelKS
+
+    !> Sparse density matrix on exit.
+    real(dp), intent(out) :: rhoPrim(:,:)
+
+    !> Storage for the dense density matrix, if needed.
+    real(dp), allocatable, intent(inout) :: rhoSqrReal(:,:,:)
+
+    type(bml_matrix_t) :: bmlHam
+    real(dp), allocatable :: buffer(:,:)
+    real(dp) :: bandFilling, normFac
+    integer :: iKS, iSpin, nSpin
+
+    @:ASSERT(this%tInit)
+    @:ASSERT(this%tInitZ)
+
+    nSpin = size(ham, dim=2)
+
+    ! SP2-solver needs idempotent density matrix with fillings 0 <= f <= 1.
+    if (nSpin == 1) then
+      normFac = 0.5_dp
+    else
+      normFac = 1.0_dp
+    end if
+
+    call bml_zero_matrix(this%sp2%bml_type, bml_element_real, dp, this%matrixDim, this%sp2%mdim,&
+        & bmlHam)
+
+    do iKS = 1, parallelKS%nLocalKS
+      iSpin = parallelKS%localKS(2, iKS)
+      bandFilling = nEl(iSpin) * normFac / real(this%matrixDim, dp)
+      call foldToRealBml(ham(:,iSpin), neighborList%iNeighbor, nNeighbor, orb,&
+          & denseDesc%iAtomStart, iSparseStart, img2CentCell, bmlHam)
+      call getDensityBml(bmlHam, this%zMat, bandFilling, this%sp2, this%matrixDim,&
+          & this%bmlRhos(iKS))
+      rhoPrim(:,iSpin) = 0.0_dp
+      call unfoldFromRealBml(this%bmlRhos(iKS), neighborList%iNeighbor, nNeighbor, orb,&
+          & denseDesc%iAtomStart, iSparseStart, img2CentCell, rhoPrim(:,iSpin))
+      if (allocated(rhoSqrReal)) then
+        call bml_export_to_dense(this%bmlRhos(iKS), buffer)
+        rhoSqrReal(:,:,iSpin) = buffer
+      end if
+    end do
+
+    call bml_deallocate(bmlHam)
+
+  end subroutine TSp2Solver_getDensity
+
+
+  !> Returns the Pulay-term for the forces (energy weighted density matrix)
+  subroutine TSp2Solver_getPulayComponent(this, ham, neighborList, nNeighbor, iSparseStart,&
+      & img2CentCell, denseDesc, orb, parallelKS, eRhoPrim)
+
+    !> Instance
+    class(TSp2Solver), intent(inout) :: this
+    
+    !> Sparse Hamiltonian
+    real(dp), intent(in) :: ham(:,:)
+
+    !> list of neighbours for each atom
+    type(TNeighborList), intent(in) :: neighborList
+    
+    !> Number of neighbours for each of the atoms
+    integer, intent(in) :: nNeighbor(:)
+
+    !> Index array for the start of atomic blocks in sparse arrays
+    integer, intent(in) :: iSparseStart(:,:)
+
+    !> map from image atoms to the original unique atom
+    integer, intent(in) :: img2CentCell(:)
+
+    !> Dense matrix descriptor
+    type(TDenseDescr), intent(in) :: denseDesc
+
+    !> Atomic orbital information
+    type(TOrbitals), intent(in) :: orb
+
+    !> K-points and spins to process
+    type(TParallelKS), intent(in) :: parallelKS
+
+    !> Sparse energy weighted density matrix
+    real(dp), intent(out) :: ERhoPrim(:)
+
+    type(bml_matrix_t) :: bmlHam, bmlPulay
+    integer :: iKS, iSpin
+
+    call bml_zero_matrix(this%sp2%bml_type, bml_element_real, dp, this%matrixDim, this%sp2%mdim,&
+        & bmlHam)
+    call bml_zero_matrix(this%sp2%bml_type, bml_element_real, dp, this%matrixDim, this%sp2%mdim,&
+        & bmlPulay)
+
+    eRhoPrim(:) = 0.0_dp
+    do iKS = 1, parallelKS%nLocalKS
+      iSpin = parallelKS%localKS(2, iKS)
+      call foldToRealBml(ham(:,iSpin), neighborList%iNeighbor, nNeighbor, orb,&
+          & denseDesc%iAtomStart, iSparseStart, img2CentCell, bmlHam)
+      call prg_pulaycomponent0(this%bmlRhos(iKS), bmlHam, bmlPulay, this%sp2%threshold,&
+          & this%matrixDim, this%sp2%bml_type, this%sp2%verbose)
+      call unfoldFromRealBml(bmlPulay, neighborList%iNeighbor, nNeighbor, orb,&
+          & denseDesc%iAtomStart, iSparseStart, img2CentCell, eRhoPrim)
+    end do
+    
+    call bml_deallocate(bmlHam)
+    call bml_deallocate(bmlPulay)
+    
+  end subroutine TSp2Solver_getPulayComponent
 
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!

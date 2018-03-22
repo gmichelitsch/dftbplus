@@ -13,6 +13,7 @@ module dftbp_progress
   use prg_sp2parser_mod
   use prg_genz_mod
   use prg_nonortho_mod
+  use prg_pulaycomponent_mod
   implicit none
   private
 
@@ -21,5 +22,6 @@ module dftbp_progress
   public :: prg_buildzdiag, prg_buildzsparse
   public :: prg_orthogonalize, prg_deorthogonalize
   public :: prg_sp2_basic, prg_sp2_alg1, prg_sp2_alg2
+  public :: prg_pulaycomponent0
 
 end module dftbp_progress

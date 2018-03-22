@@ -1472,7 +1472,7 @@ contains
       end if
     #:if WITH_PROGRESS
       allocate(solver%sp2Solver)
-      call TSp2Solver_init(solver%sp2Solver, nOrb)
+      call TSp2Solver_init(solver%sp2Solver, nOrb, parallelKS%nLocalKS)
       if (tForces) then
         tKeepRhoSqr = .true.
       end if

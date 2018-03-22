@@ -414,7 +414,7 @@ contains
         call env%globalTimer%startTimer(globalTimers%energyDensityMatrix)
         call getEnergyWeightedDensity(env, denseDesc, forceType, filling, eigen, kPoint, kWeight,&
             & neighborList, nNeighbor, orb, iSparseStart, img2CentCell, iCellVec, cellVec,&
-            & tRealHS, ham, over, parallelKS, ERhoPrim, eigvecsReal, SSqrReal, eigvecsCplx,&
+            & tRealHS, solver, ham, over, parallelKS, ERhoPrim, eigvecsReal, SSqrReal, eigvecsCplx,&
             & SSqrCplx, rhoSqrReal)
         call env%globalTimer%stopTimer(globalTimers%energyDensityMatrix)
         call getGradients(env, sccCalc, tEField, tXlbomd, nonSccDeriv, Efield, rhoPrim, ERhoPrim,&
@@ -1638,28 +1638,21 @@ contains
 
     call qm2ud(ham)
 
-    select case (solver%solverType)
-
-    case (solverTypes%lapackQr, solverTypes%lapackDivAndConq, solverTypes%lapackRelRobust)
-      call getDensityByDenseDiag(env, denseDesc, ham, over, neighborList, nNeighbor,&
-          & iSparseStart, img2CentCell, iCellVec, cellVec, kPoint, kWeight, orb, species, solver,&
-          & tRealHS, tSpinSharedEf, tSpinOrbit, tDualSpinOrbit, tFillKSep, tFixEf, tMulliken,&
-          & iDistribFn, tempElec, nEl, parallelKS, Ef, energy, eigen, filling, rhoPrim, Eband, TS,&
-          & E0, iHam, xi, orbitalL, HSqrReal, SSqrReal, eigvecsReal, iRhoPrim, HSqrCplx, SSqrCplx,&
-          & eigvecsCplx, rhoSqrReal)
-
-    case (solverTypes%progressSp2)
+    if (solver%solverType == solverTypes%progressSp2) then
       if (.not. tRealHS .or. nSpin == 4) then
         call error("Internal error: SP2 solver does not work with complex Hamiltonian or&
             & non-colinear spin")
       end if
       call getDensityBySp2(env, denseDesc, ham, neighborList, nNeighbor, iSparseStart,&
           & img2CentCell, orb, solver, nEl, parallelKS, rhoPrim, rhoSqrReal)
-
-    case default
-      call error("Internal error: invalid solver type in getDensity")
-
-    end select
+    else
+      call getDensityByDenseDiag(env, denseDesc, ham, over, neighborList, nNeighbor,&
+          & iSparseStart, img2CentCell, iCellVec, cellVec, kPoint, kWeight, orb, species, solver,&
+          & tRealHS, tSpinSharedEf, tSpinOrbit, tDualSpinOrbit, tFillKSep, tFixEf, tMulliken,&
+          & iDistribFn, tempElec, nEl, parallelKS, Ef, energy, eigen, filling, rhoPrim, Eband, TS,&
+          & E0, iHam, xi, orbitalL, HSqrReal, SSqrReal, eigvecsReal, iRhoPrim, HSqrCplx, SSqrCplx,&
+          & eigvecsCplx, rhoSqrReal)
+    end if
 
     call ud2qm(rhoPrim)
 
@@ -3605,8 +3598,8 @@ contains
   !> NOTE: Dense eigenvector and overlap matrices are overwritten.
   !>
   subroutine getEnergyWeightedDensity(env, denseDesc, forceType, filling, eigen, kPoint, kWeight,&
-      & neighborList, nNeighbor, orb, iSparseStart, img2CentCell, iCellVEc, cellVec, tRealHS, ham,&
-      & over, parallelKS, ERhoPrim, HSqrReal, SSqrReal, HSqrCplx, SSqrCplx, rhoSqrReal)
+      & neighborList, nNeighbor, orb, iSparseStart, img2CentCell, iCellVEc, cellVec, tRealHS,&
+      & solver, ham, over, parallelKS, ERhoPrim, HSqrReal, SSqrReal, HSqrCplx, SSqrCplx, rhoSqrReal)
 
     !> Environment settings
     type(TEnvironment), intent(in) :: env
@@ -3653,6 +3646,9 @@ contains
     !> Is the hamitonian real (no k-points/molecule/gamma point)?
     logical, intent(in) :: tRealHS
 
+    !> Eigensolver choice
+    type(TSolver), intent(inout) :: solver
+
     !> Sparse Hamiltonian
     real(dp), intent(in) :: ham(:,:)
 
@@ -3682,23 +3678,73 @@ contains
 
     integer :: nSpin
 
-    nSpin = size(ham, dim=2)
-
-    if (nSpin == 4) then
-      call getEDensityMtxFromPauliEigvecs(env, denseDesc, filling, eigen, kPoint, kWeight,&
-          & neighborList, nNeighbor, orb, iSparseStart, img2CentCell, iCellVec, cellVec, tRealHS,&
-          & parallelKS, HSqrCplx, SSqrCplx, ERhoPrim)
-    else if (tRealHS) then
-      call getEDensityMtxFromRealEigvecs(env, denseDesc, forceType, filling, eigen, neighborList,&
-          & nNeighbor, orb, iSparseStart, img2CentCell, ham, over, parallelKS, HSqrReal, SSqrReal,&
-          & ERhoPrim, rhoSqrReal)
+    if (solver%solverType == solverTypes%progressSp2) then
+      call getEDensityMtxFromSp2(ham, neighborList, nNeighbor, iSparseStart, img2CentCell,&
+          & denseDesc, orb, parallelKS, solver, eRhoPrim)
     else
-      call getEDensityMtxFromComplexEigvecs(env, denseDesc, forceType, filling, eigen, kPoint,&
-          & kWeight, neighborList, nNeighbor, orb, iSparseStart, img2CentCell, iCellVec, cellVec,&
-          & ham, over, parallelKS, HSqrCplx, SSqrCplx, ERhoPrim)
+      nSpin = size(ham, dim=2)
+
+      if (nSpin == 4) then
+        call getEDensityMtxFromPauliEigvecs(env, denseDesc, filling, eigen, kPoint, kWeight,&
+            & neighborList, nNeighbor, orb, iSparseStart, img2CentCell, iCellVec, cellVec, tRealHS,&
+            & parallelKS, HSqrCplx, SSqrCplx, ERhoPrim)
+      else if (tRealHS) then
+        call getEDensityMtxFromRealEigvecs(env, denseDesc, forceType, filling, eigen, neighborList,&
+            & nNeighbor, orb, iSparseStart, img2CentCell, ham, over, parallelKS, HSqrReal,&
+            & SSqrReal, ERhoPrim, rhoSqrReal)
+      else
+        call getEDensityMtxFromComplexEigvecs(env, denseDesc, forceType, filling, eigen, kPoint,&
+            & kWeight, neighborList, nNeighbor, orb, iSparseStart, img2CentCell, iCellVec, cellVec,&
+            & ham, over, parallelKS, HSqrCplx, SSqrCplx, ERhoPrim)
+      end if
     end if
 
   end subroutine getEnergyWeightedDensity
+
+
+  !> Returns the energy weighted density matrix using the SP2-solver
+  subroutine getEDensityMtxFromSp2(ham, neighborList, nNeighbor, iSparseStart, img2CentCell,&
+      & denseDesc, orb, parallelKS, solver, eRhoPrim)
+
+    !> Sparse Hamiltonian
+    real(dp), intent(in) :: ham(:,:)
+
+    !> list of neighbours for each atom
+    type(TNeighborList), intent(in) :: neighborList
+    
+    !> Number of neighbours for each of the atoms
+    integer, intent(in) :: nNeighbor(:)
+
+    !> Index array for the start of atomic blocks in sparse arrays
+    integer, intent(in) :: iSparseStart(:,:)
+
+    !> map from image atoms to the original unique atom
+    integer, intent(in) :: img2CentCell(:)
+
+    !> Dense matrix descriptor
+    type(TDenseDescr), intent(in) :: denseDesc
+
+    !> Atomic orbital information
+    type(TOrbitals), intent(in) :: orb
+
+    !> K-points and spins to process
+    type(TParallelKS), intent(in) :: parallelKS
+
+    !> Eigensolver choice
+    type(TSolver), intent(inout) :: solver
+
+    !> Sparse energy weighted density matrix
+    real(dp), intent(out) :: ERhoPrim(:)
+
+  #:if WITH_PROGRESS
+    ! Density matrix must not be passed, as solver caches it.
+    call solver%sp2Solver%getPulayComponent(ham, neighborList, nNeighbor, iSparseStart,&
+        & img2CentCell, denseDesc, orb, parallelKS, ERhoPrim)
+  #:else
+    call error("Internal error: getEDensityFromSp2 called despite missing Progress support")
+  #:endif
+    
+  end subroutine getEDensityMtxFromSp2
 
 
   !> Calculates density matrix from real eigenvectors.
