@@ -873,6 +873,7 @@ contains
     !end if
 
     if (tXlbomdFast) then
+      call getChildValue(pRoot, 'MinSccIterations', input%minSCCIter, 1)
       call getChildValue(pRoot, 'TransientSteps', input%nTransientSteps, 10)
       input%minSccIter = 1
       input%maxSccIter = 1
