@@ -15,17 +15,21 @@ module mixer
   use andersonmixer
   use broydenmixer
   use diismixer
+  use kernelmixer
   use message
   implicit none
-
   private
+
+  public :: OMixer
+  public :: init, reset, mix
+  public :: hasInverseJacobian, getInverseJacobian
 
 
   !> Interface type for various mixers.
   type OMixer
     private
 
-    !> numerical type of mixer 1:4
+    !> numerical type of mixer 1:5
     integer :: mixerType
 
     !> simple mixer instance
@@ -39,6 +43,10 @@ module mixer
 
     !> modified DIIS mixer instance
     type(ODIISMixer),  allocatable :: pDIISMixer
+
+    !> XL-BOMD kernel mixer
+    type(TKernelMixer), allocatable :: pKernelMixer
+    
   end type OMixer
 
 
@@ -48,6 +56,7 @@ module mixer
     module procedure Mixer_initAnderson
     module procedure Mixer_initBroyden
     module procedure Mixer_initDIIS
+    module procedure Mixer_initKernel
   end interface
 
 
@@ -74,9 +83,6 @@ module mixer
     module procedure Mixer_getInverseJacobian
   end interface getInverseJacobian
 
-  public :: OMixer
-  public :: init, reset, mix
-  public :: hasInverseJacobian, getInverseJacobian
 
 
   !> Identifying constant for each of the different mixers.
@@ -84,6 +90,7 @@ module mixer
   integer, parameter :: iAndersonMixer = 2
   integer, parameter :: iBroydenMixer = 3
   integer, parameter :: iDIISMixer = 4
+  integer, parameter :: iKernelMixer = 5
 
 contains
 
@@ -148,6 +155,21 @@ contains
   end subroutine Mixer_initDIIS
 
 
+  !> Initializes an XLBMOD-kernel mixer
+  subroutine Mixer_initKernel(self, pKernel)
+
+    !> Mixer instance
+    type(OMixer), intent(out) :: self
+
+    !> A valid DIIS mixer instance on exit.
+    type(TKernelMixer), allocatable, intent(inout) :: pKernel
+
+    self%mixerType = iKernelMixer
+    call move_alloc(pKernel, self%pKernelMixer)
+
+  end subroutine Mixer_initKernel
+
+
   !> Resets the mixer
   subroutine Mixer_reset(self, nElem)
 
@@ -166,6 +188,10 @@ contains
       call reset(self%pBroydenMixer, nElem)
     case (iDIISMixer)
       call reset(self%pDIISMixer, nElem)
+    case (iKernelMixer)
+      call reset(self%pKernelMixer, nElem)
+    case default
+      call error("Internal error: unknown mixer in Mixer_reset")
     end select
 
   end subroutine Mixer_reset
@@ -192,6 +218,10 @@ contains
       call mix(self%pBroydenMixer, qInpRes, qDiff)
     case (iDIISMixer)
       call mix(self%pDIISMixer, qInpRes, qDiff)
+    case (iKernelMixer)
+      call mix(self%pKernelMixer, qInpRes, qDiff)
+    case default
+      call error("Internal error: unknonw mixer in Mixer_mix")
     end select
 
   end subroutine Mixer_mix
@@ -238,6 +268,10 @@ contains
       call getInverseJacobian(self%pBroydenMixer, invJac)
     case (iDIISMixer)
       call error("DIIS mixer does not provide inverse Jacobian")
+    case (iKernelMixer)
+      call error("Kernel mixer does not provide inverse Jacobian")
+    case default
+      call error("Internal error: unknonw mixer in Mixer_getInverseJacobian")
     end select
 
   end subroutine Mixer_getInverseJacobian

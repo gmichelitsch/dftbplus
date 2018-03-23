@@ -1405,6 +1405,13 @@ contains
         call getChildValue(value, "InitMixingParameter", ctrl%almix, 0.2_dp)
         call getChildValue(value, "Generations", ctrl%iGenerations, 6)
         call getChildValue(value, "UseFromStart", ctrl%tFromStart, .true.)
+
+      case("kernel")
+        ctrl%iMixSwitch = 5
+        allocate(ctrl%kernelMixerInp)
+        call getChildValue(value, "MixingParameter", ctrl%kernelMixerInp%mixParam, 0.1_dp)
+        call getChildvalue(value, "Displacement", ctrl%kernelMixerInp%delta, 0.01_dp)
+
       case default
         call getNodeHSDName(value, buffer)
         call detailedError(child, "Invalid mixer '" // char(buffer) // "'")

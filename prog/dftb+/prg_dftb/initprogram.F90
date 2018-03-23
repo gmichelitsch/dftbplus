@@ -29,6 +29,7 @@ module initprogram
   use andersonmixer
   use broydenmixer
   use diismixer
+  use kernelmixer
 
   use geoopt
   use conjgrad
@@ -825,6 +826,9 @@ contains
     !> DIIS mixer (if used)
     type(ODIISMixer), allocatable :: pDIISMixer
 
+    !> Kernel mixer
+    type(TKernelMixer), allocatable :: pKernelMixer
+
     ! Geometry optimizer related local variables
 
     !> Conjugate gradient driver
@@ -1365,6 +1369,10 @@ contains
         allocate(pDIISMixer)
         call init(pDIISMixer,nGeneration, mixParam, input%ctrl%tFromStart)
         call init(pChrgMixer, pDIISMixer)
+      case (5)
+        allocate(pKernelMixer)
+        call init(pKernelMixer, input%ctrl%kernelMixerInp)
+        call init(pChrgMixer, pKernelMixer)
       case default
         call error("Unknown charge mixer type.")
       end select

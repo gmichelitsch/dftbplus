@@ -25,6 +25,7 @@ module inputdata_module
 #:endif
   use pmlocalisation, only : TPipekMezeyInp
   use elstatpot, only : TElStatPotentialsInp
+  use kernelmixer, only : TKernelMixerInp
   implicit none
   private
   save
@@ -209,6 +210,7 @@ module inputdata_module
     integer :: andersonNrDynMix = 0
     real(dp), allocatable :: andersonDynMixParams(:,:)
     real(dp) :: andersonOmega0 = 1.0e-2_dp
+    type(TKernelMixerInp), allocatable :: kernelMixerInp
     integer :: nrMoved       = 0
     integer, allocatable :: indMovedAtom(:)
     integer :: nrConstr      = 0

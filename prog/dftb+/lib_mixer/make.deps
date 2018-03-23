@@ -13,8 +13,13 @@ diismixer.o = diismixer.o $(_mod_accuracy) $(_mod_lapackroutines) $(common.fypp)
 _mod_diismixer: diismixer.o
 _mod_diismixer = $(diismixer.o)
 
-mixer.o: _mod_broydenmixer _mod_simplemixer _mod_assert _mod_diismixer common.fypp _mod_message _mod_andersonmixer _mod_accuracy
-mixer.o = mixer.o $(_mod_broydenmixer) $(_mod_simplemixer) $(_mod_assert) $(_mod_diismixer) $(common.fypp) $(_mod_message) $(_mod_andersonmixer) $(_mod_accuracy)
+kernelmixer.o: _mod_accuracy common.fypp _mod_assert
+kernelmixer.o = kernelmixer.o $(_mod_accuracy) $(common.fypp) $(_mod_assert)
+_mod_kernelmixer: kernelmixer.o
+_mod_kernelmixer = $(kernelmixer.o)
+
+mixer.o: _mod_broydenmixer _mod_simplemixer _mod_assert _mod_diismixer common.fypp _mod_kernelmixer _mod_message _mod_andersonmixer _mod_accuracy
+mixer.o = mixer.o $(_mod_broydenmixer) $(_mod_simplemixer) $(_mod_assert) $(_mod_diismixer) $(common.fypp) $(_mod_kernelmixer) $(_mod_message) $(_mod_andersonmixer) $(_mod_accuracy)
 _mod_mixer: mixer.o
 _mod_mixer = $(mixer.o)
 
